@@ -150,3 +150,4 @@ drop policy if exists "files: membres mise à jour" on storage.objects;
 create policy "files: membres mise à jour" on storage.objects for update using (bucket_id = 'files' and public.is_member((split_part(name, '/', 1))::uuid));
 drop policy if exists "files: membres suppression" on storage.objects;
 create policy "files: membres suppression" on storage.objects for delete using (bucket_id = 'files' and public.is_member((split_part(name, '/', 1))::uuid));
+

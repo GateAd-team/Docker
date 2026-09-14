@@ -23,8 +23,13 @@ npm test           # tests des calculs financiers
 npm run typecheck  # vérification TypeScript des deux côtés
 ```
 
+Au lancement, l'application demande de **se connecter ou créer un compte** (email + mot de passe), puis de
+**créer son espace de travail ou rejoindre celui d'un collègue** avec son code d'invitation. Chaque espace a ses
+propres données, visibles uniquement par ses membres. Le serveur (projet Supabase) est intégré à l'application
+(`src/shared/cloudConfig.ts`) : rien à configurer sur le poste.
+
 Première utilisation : **Réglages → clé API Anthropic** (créée sur console.anthropic.com), puis « Tester la clé ».
-Sans clé, tout fonctionne sauf l'analyse automatique des documents.
+Sans clé, tout fonctionne sauf l'analyse automatique des documents. La clé est partagée avec les autres comptes.
 « Charger les données d'exemple » dans Réglages permet de voir l'app remplie.
 
 ## Architecture
@@ -35,12 +40,15 @@ electron/            process principal Electron (Node)
   preload.ts         expose window.docker (API typée : src/shared/types.ts → DockerApi)
   store.ts           stockage JSON local + copie des fichiers importés
   ai.ts              appel à l'API Claude (PDF → bloc document, image → bloc image, réponse forcée via tool_use)
+  cloud.ts           compte Supabase (login), espaces de travail (créer / rejoindre par code), synchro temps réel + fichiers
 src/shared/          code partagé main ↔ renderer (aucune dépendance Electron ni React)
+  cloudConfig.ts     URL + clé publique du projet Supabase (intégrées à l'app, identiques pour tous)
   types.ts           modèle de données complet (Database) + interface DockerApi
   finance.ts         calculs : conversion devises, coût de revient, douane, marges, prix cible
   extraction.ts      prompt d'extraction + schémas attendus par type de document
 src/renderer/        interface React (Vite)
   api.ts             window.docker si présent, sinon mode démo (localStorage + IA simulée)
+  cloud.tsx          état du compte (connecté ? synchro ?) ; pages/Login.tsx + pages/Workspace.tsx = connexion puis choix de l'espace
   store.tsx          état global (toute la base en mémoire, sauvegarde à chaque mutation)
   applyExtraction.ts résultat IA → propositions de fiches → application à la base
   pages/             Dashboard, Projects (+R&D), Factories, Logistics, Finance, Documents, Settings

@@ -54,12 +54,7 @@ app.whenReady().then(() => {
   db = loadDb();
 
   ipcMain.handle('db:load', () => db);
-  ipcMain.handle('db:save', (_e, next: Database) => {
-    const before = db.settings.cloud;
-    db = next; saveDb(db);
-    if (before.url !== next.settings.cloud.url || before.anonKey !== next.settings.cloud.anonKey) cloud.configure().catch(() => undefined);
-    else cloud.scheduleSync();
-  });
+  ipcMain.handle('db:save', (_e, next: Database) => { db = next; saveDb(db); cloud.scheduleSync(); });
   cloud.configure().catch(() => undefined);
 
   ipcMain.handle('cloud:status', () => cloud.getStatus());

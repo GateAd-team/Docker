@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient, type RealtimeChannel } from '@supaba
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataDir } from './store';
+import { SUPABASE_KEY, SUPABASE_URL } from '../src/shared/cloudConfig';
 import { mergeDatabases, toShared } from '../src/shared/sync';
 import { normalizeDatabase, type CloudStatus, type Database, type DocumentRecord } from '../src/shared/types';
 
@@ -31,7 +32,7 @@ export class Cloud {
   private client: SupabaseClient | null = null;
   private url = ''; private key = '';
   private channel: RealtimeChannel | null = null;
-  private status: CloudStatus = { configured: false, user: null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
+  private status: CloudStatus = { ready: false, configured: false, user: null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
   private pushTimer: NodeJS.Timeout | null = null;
   private busy: Promise<void> = Promise.resolve();
   private deps: Deps;
@@ -39,24 +40,22 @@ export class Cloud {
 
   constructor(deps: Deps, onStatus: (s: CloudStatus) => void) { this.deps = deps; this.onStatus = onStatus; }
 
-  /** (Re)configure le client quand l'URL / la clé changent dans les réglages. */
+  /** Crée le client (projet Supabase intégré à l'application, voir `cloudConfig.ts`) et restaure la session enregistrée sur ce poste. */
   async configure(): Promise<void> {
-    const { url, anonKey, orgId } = this.deps.getDb().settings.cloud;
-    if (url !== this.url || anonKey !== this.key) {
-      this.url = url; this.key = anonKey;
-      this.unsubscribe();
-      this.client = url && anonKey ? createClient(url, anonKey, { auth: { storage: fileStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }) : null;
-      this.status = { ...this.status, configured: !!this.client, user: null, orgs: [], members: [], error: '' };
+    if (!this.client) {
+      this.url = SUPABASE_URL; this.key = SUPABASE_KEY;
+      this.client = createClient(this.url, this.key, { auth: { storage: fileStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+      this.status = { ...this.status, configured: true, user: null, orgs: [], members: [], error: '' };
     }
-    this.status.activeOrgId = orgId;
-    if (this.client) await this.refresh().catch((e) => this.fail(e));
-    this.emit();
+    this.status.activeOrgId = this.deps.getDb().settings.cloud.orgId;
+    try { await this.refresh(); } catch (e) { this.fail(e); }
+    finally { this.status.ready = true; this.emit(); }
   }
 
   getStatus(): CloudStatus { return this.status; }
   private emit() { this.onStatus(this.status); }
   private fail(e: unknown) { this.status = { ...this.status, error: (e as Error).message || String(e) }; this.emit(); }
-  private need(): SupabaseClient { if (!this.client) throw new Error("Renseigne l'URL et la clé Supabase dans Réglages › Compte."); return this.client; }
+  private need(): SupabaseClient { if (!this.client) throw new Error('Serveur pas encore initialisé : réessaie dans un instant.'); return this.client; }
 
   /** Recharge utilisateur, organisations, membres ; (ré)abonne le temps réel ; lance une synchro si connecté. */
   async refresh(): Promise<CloudStatus> {
@@ -65,16 +64,30 @@ export class Cloud {
     if (!user) { this.unsubscribe(); this.status = { ...this.status, user: null, orgs: [], members: [], error: '' }; this.emit(); return this.status; }
     const { data: prof } = await c.from('profiles').select('name').eq('id', user.id).maybeSingle();
     this.status.user = { id: user.id, email: user.email ?? '', name: prof?.name ?? '' };
-    const { data: mem, error } = await c.from('org_members').select('role, organizations(id, name, invite_code)').eq('user_id', user.id);
-    if (error) throw error;
-    type Row = { role: string; organizations: { id: string; name: string; invite_code: string } | { id: string; name: string; invite_code: string }[] | null };
-    this.status.orgs = ((mem ?? []) as Row[]).flatMap((m) => { const o = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations; return o ? [{ id: o.id, name: o.name, role: m.role, inviteCode: o.invite_code }] : []; });
-    if (!this.status.orgs.some((o) => o.id === this.status.activeOrgId)) this.status.activeOrgId = this.status.orgs[0]?.id ?? '';
+    this.status.orgs = await this.loadOrgs(user.id);
+    // Espace actif inconnu (nouveau poste, espace quitté…) : on prend le premier disponible, ou aucun → l'app propose de créer / rejoindre un espace.
+    if (!this.status.orgs.some((o) => o.id === this.status.activeOrgId)) {
+      const first = this.status.orgs[0];
+      this.status.activeOrgId = first?.id ?? '';
+      // Nouveau poste ou nouvel espace : la base de fusion repart de zéro (le local et le distant seront fusionnés fiche par fiche).
+      this.writeBase(emptyShared());
+      try { fs.unlinkSync(uploadedPath()); } catch { /* absent */ }
+      const db = this.deps.getDb();
+      if (db.settings.cloud.orgId !== this.status.activeOrgId) this.deps.setDb({ ...db, settings: { ...db.settings, cloud: { ...db.settings.cloud, orgId: this.status.activeOrgId, orgName: first?.name ?? '' } } }, false);
+    }
     await this.loadMembers();
     this.status.error = '';
     this.emit();
     if (this.status.activeOrgId) { this.subscribe(); await this.sync(); }
     return this.status;
+  }
+
+  private async loadOrgs(userId: string): Promise<CloudStatus['orgs']> {
+    const c = this.need();
+    const { data: mem, error } = await c.from('org_members').select('role, organizations(id, name, invite_code)').eq('user_id', userId);
+    if (error) throw new Error(describe(error.message));
+    type Row = { role: string; organizations: { id: string; name: string; invite_code: string } | { id: string; name: string; invite_code: string }[] | null };
+    return ((mem ?? []) as Row[]).flatMap((m) => { const o = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations; return o ? [{ id: o.id, name: o.name, role: m.role, inviteCode: o.invite_code }] : []; });
   }
 
   private async loadMembers() {
@@ -251,6 +264,6 @@ function describe(msg: string): string {
   if (/Email not confirmed/i.test(msg)) return 'Adresse email pas encore confirmée : ouvre le lien reçu par email.';
   if (/User already registered/i.test(msg)) return 'Un compte existe déjà avec cette adresse : connecte-toi.';
   if (/Password should be/i.test(msg)) return 'Mot de passe trop court (6 caractères minimum).';
-  if (/fetch failed|ENOTFOUND|ECONN/i.test(msg)) return 'Impossible de joindre le serveur : vérifie l\'URL Supabase et la connexion internet.';
+  if (/fetch failed|ENOTFOUND|ECONN/i.test(msg)) return 'Impossible de joindre le serveur : vérifie la connexion internet.';
   return msg;
 }

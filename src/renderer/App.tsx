@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState } from 'react';
 import { api } from './api';
 import { useStore } from './store';
+import { useCloud } from './cloud';
+import { LoginPage } from './pages/Login';
+import { WorkspacePage } from './pages/Workspace';
 import { Dashboard } from './pages/Dashboard';
 import { MerchandisePage } from './pages/Merchandise';
 import { FactoriesPage } from './pages/Factories';
@@ -30,7 +33,18 @@ const PAGES: { page: Page; label: string; ico: string }[] = [
 ];
 
 export function App() {
+  const { status: cloud } = useCloud();
+  // Connexion obligatoire (sauf mode démo dans le navigateur), puis un espace de travail (créé ou rejoint par code).
+  // Aperçu des écrans d'accueil en mode démo (navigateur) : http://localhost:5173/?screen=login ou ?screen=workspace
+  const preview = api.isDemo ? new URLSearchParams(window.location.search).get('screen') : null;
+  if (preview === 'login' || (!api.isDemo && !cloud?.user)) return <LoginPage />;
+  if (preview === 'workspace' || (!api.isDemo && !cloud?.activeOrgId)) return <WorkspacePage />;
+  return <Workspace />;
+}
+
+function Workspace() {
   const { db, ready } = useStore();
+  const { status: cloud } = useCloud();
   // Historique de navigation (comme un navigateur) : pile de pages + position.
   const [history, setHistory] = useState<{ stack: NavState[]; index: number }>({ stack: [{ page: 'dashboard' }], index: 0 });
   const nav = history.stack[history.index];
@@ -81,7 +95,7 @@ export function App() {
             ))}
             <button className={`assistant-btn${assistant ? ' active' : ''}`} onClick={() => setAssistant((a) => !a)}><span className="ico">✦</span>Assistant</button>
           </nav>
-          <div className="foot">{api.isDemo ? 'Mode démo (navigateur)' : 'Données stockées sur cet ordinateur'}</div>
+          <div className="foot">{api.isDemo ? 'Mode démo (navigateur)' : cloud?.user ? <><div>🏢 {cloud.orgs.find((o) => o.id === cloud.activeOrgId)?.name}</div><div>👤 {cloud.user.name || cloud.user.email}{cloud.syncing ? ' · synchro…' : cloud.error ? ' · ⚠️ hors ligne' : cloud.lastSync ? ' · ✅ synchronisé' : ''}</div></> : 'Données stockées sur cet ordinateur'}</div>
         </aside>
         <main className="main">
           {api.isDemo && <div className="demo-banner">Mode démo : données d'exemple, lecture IA simulée. Lance l'application Electron pour la version complète.</div>}

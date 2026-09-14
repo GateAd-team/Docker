@@ -57,7 +57,7 @@ function demoExtraction(doc: DocumentRecord): ExtractionResult {
   };
 }
 
-const demoCloud: CloudStatus = { configured: false, user: null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
+const demoCloud: CloudStatus = { ready: true, configured: false, user: new URLSearchParams(window.location.search).get('screen') === 'workspace' ? { id: 'demo', email: 'theo@wallup.fr', name: 'Théo' } : null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
 
 const demoApi: DockerApi = {
   isDemo: true,

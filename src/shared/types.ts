@@ -322,12 +322,8 @@ export interface Settings {
     /** Emails supprimés dans Docker : on ne les re-télécharge pas. */
     skipIds: string[];
   };
-  /** Compte & synchronisation (Supabase) : propre au poste, jamais envoyé sur le serveur. */
-  cloud: {
-    url: string; anonKey: string;
-    /** Organisation active (espace partagé). */
-    orgId: string; orgName: string;
-  };
+  /** Espace partagé actif (Supabase, voir `cloudConfig.ts`) : propre au poste, jamais envoyé sur le serveur. */
+  cloud: { orgId: string; orgName: string };
 }
 
 /** Email récupéré depuis la boîte Gmail (échanges transporteurs / agents). */
@@ -376,7 +372,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultVat: { FR: 20, UK: 20, US: 0 },
   companyName: 'Wall Up',
   senderName: 'Théo',
-  cloud: { url: '', anonKey: '', orgId: '', orgName: '' },
+  cloud: { orgId: '', orgName: '' },
   gmail: { mode: 'oauth', email: '', appPassword: '', clientId: '', clientSecret: '', refreshToken: '', label: '', historyDays: 730, skipIds: [], keywords: 'shipping, freight, fret, container, conteneur, B/L, bill of lading, booking, ETA, ETD, forwarder, transitaire, douane, customs, port, Le Havre, Shenzhen', lastSync: '' },
 };
 
@@ -499,6 +495,8 @@ export interface DockerApi {
 }
 
 export interface CloudStatus {
+  /** Première vérification de session terminée (avant : on ne sait pas encore si l'utilisateur est connecté). */
+  ready: boolean;
   configured: boolean;
   user: { id: string; email: string; name: string } | null;
   orgs: { id: string; name: string; role: string; inviteCode: string }[];

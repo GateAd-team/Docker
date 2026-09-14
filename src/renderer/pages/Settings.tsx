@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { api } from '../api';
+import { useCloud } from '../cloud';
 import { ConfirmButton, Field, Input, NumberInput } from '../components/ui';
 import type { CloudStatus, Currency, Market, Settings } from '../../shared/types';
 import { emptyDatabase } from '../../shared/types';
@@ -74,7 +75,7 @@ export function SettingsPage() {
     <div className="page">
       <div className="page-head"><div><h1>Réglages</h1><div className="sub">Clé API, taux de change, valeurs par défaut.</div></div><div className="actions"><button className="btn primary" onClick={save}>Enregistrer</button></div></div>
 
-      <CloudCard s={s} setS={setS} />
+      <CloudCard />
 
       <div className="card">
         <h2>Lecture des documents (API Claude)</h2>
@@ -167,102 +168,59 @@ export function SettingsPage() {
 }
 
 
-/** Compte & synchronisation : connexion, organisation partagée (plusieurs utilisateurs), état de la synchro. */
-function CloudCard({ s, setS }: { s: Settings; setS: (v: Settings) => void }) {
-  const { db, update, toast } = useStore();
-  const [st, setSt] = useState<CloudStatus | null>(null);
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [form, setForm] = useState({ email: '', password: '', name: '' });
+/** Compte & espaces de travail : qui est connecté, espace actif (code d'invitation, membres), changer / rejoindre / créer / quitter un espace. Le serveur est intégré à l'application (cloudConfig.ts). */
+function CloudCard() {
+  const { toast } = useStore();
+  const { status: st, run, busy } = useCloud();
   const [orgName, setOrgName] = useState('');
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    api.cloudStatus().then(setSt).catch(() => undefined);
-    const w = (window as unknown as { dockerCloud?: { onStatus: (cb: (s: CloudStatus) => void) => () => void } }).dockerCloud;
-    return w ? w.onStatus(setSt) : undefined;
-  }, []);
-  const run = async (fn: () => Promise<CloudStatus>, okMsg?: string) => {
-    setBusy(true);
-    try { const r = await fn(); setSt(r); if (okMsg) toast(okMsg); }
-    catch (e) { toast((e as Error).message, true); }
-    finally { setBusy(false); }
-  };
-  const saveConfig = () => { update((d) => ({ ...d, settings: { ...d.settings, cloud: { ...d.settings.cloud, url: s.cloud.url.trim(), anonKey: s.cloud.anonKey.trim() } } })); toast('Configuration enregistrée — connexion en cours…'); setTimeout(() => api.cloudStatus().then(setSt).catch(() => undefined), 1500); };
-  const configured = !!db.settings.cloud.url && !!db.settings.cloud.anonKey;
+  const act = async (fn: () => Promise<CloudStatus>, okMsg: string) => { const err = await run(fn); if (err) toast(err, true); else { toast(okMsg); setOrgName(''); setCode(''); } };
   const active = st?.orgs.find((o) => o.id === st.activeOrgId);
   const isOwner = active?.role === 'owner';
   return (
     <div className="card">
       <div className="card-head">
-        <div><h2>Compte & espace partagé</h2><div className="small muted">Un compte par personne, un espace partagé par société : tout le monde voit et modifie les mêmes importations, marchandises, usines et documents, en temps réel, sur Mac comme sur PC.</div></div>
-        {st?.user ? <span className="row-flex small">{st.syncing ? <><span className="spinner" /> synchronisation…</> : st.lastSync ? <span className="muted">✅ synchronisé {new Date(st.lastSync).toLocaleTimeString('fr-FR')} · v{st.version}</span> : null}{st.user && active && <button className="btn small" disabled={busy || st.syncing} onClick={() => run(() => api.cloudSyncNow(), 'Synchronisé')}>↻ Synchroniser</button>}</span> : null}
+        <div><h2>Compte & espace partagé</h2><div className="small muted">Un compte par personne. Un espace par société : ses membres voient et modifient les mêmes importations, marchandises, usines et documents, en temps réel, sur Mac comme sur PC. Les autres espaces n'y ont pas accès.</div></div>
+        {st?.user && (
+          <span className="row-flex small">
+            {st.syncing ? <><span className="spinner" /> synchronisation…</> : st.lastSync ? <span className="muted">✅ synchronisé {new Date(st.lastSync).toLocaleTimeString('fr-FR')} · v{st.version}</span> : null}
+            {active && <button className="btn small" disabled={busy || st.syncing} onClick={() => act(() => api.cloudSyncNow(), 'Synchronisé')}>↻ Synchroniser</button>}
+          </span>
+        )}
       </div>
       {st?.error && <div className="dup-banner warn mb">⚠️ {st.error}</div>}
-
-      {!configured || !st?.configured ? (
-        <>
-          <div className="form c3">
-            <Field label="URL du projet Supabase" span={2}><Input value={s.cloud.url} onChange={(v) => setS({ ...s, cloud: { ...s.cloud, url: v } })} placeholder="https://xxxxx.supabase.co" /></Field>
-            <Field label=" "><button className="btn primary" style={{ marginTop: 20 }} onClick={saveConfig} disabled={!s.cloud.url.trim() || !s.cloud.anonKey.trim()}>Connecter le serveur</button></Field>
-            <Field label="Clé « anon public »" span={3}><Input type="password" value={s.cloud.anonKey} onChange={(v) => setS({ ...s, cloud: { ...s.cloud, anonKey: v } })} placeholder="eyJhbGciOi…" /></Field>
-          </div>
-          <details className="small mt"><summary style={{ cursor: 'pointer' }}>Mettre en place le serveur (une seule fois, 5 minutes)</summary>
-            <ol className="small" style={{ lineHeight: 1.7 }}>
-              <li>Crée un compte gratuit sur <b>supabase.com</b>, puis « New project » (région : Europe, Frankfurt ou Paris). Note le mot de passe de base de données, il ne sert qu'à Supabase.</li>
-              <li>Dans le projet : menu <b>SQL Editor</b> → « New query » → colle tout le contenu du fichier <code>supabase/schema.sql</code> (dans le dossier de Docker) → <b>Run</b>. Ça crée les tables, les règles d'accès, les fonctions et le stockage des fichiers.</li>
-              <li>Menu <b>Authentication</b> → Providers → Email : laisse « Email » activé. Pour éviter l'étape de confirmation par email au début, tu peux décocher « Confirm email ».</li>
-              <li>Menu <b>Project settings</b> → API : copie l'<b>URL</b> et la clé <b>anon public</b> ci-dessus, puis « Connecter le serveur ». Ton associé mettra exactement les mêmes valeurs sur son poste.</li>
-            </ol>
-          </details>
-        </>
-      ) : !st?.user ? (
-        <>
-          <div className="row-flex mb" style={{ gap: 6 }}><button className={`chip${mode === 'login' ? ' on' : ''}`} onClick={() => setMode('login')}>Se connecter</button><button className={`chip${mode === 'signup' ? ' on' : ''}`} onClick={() => setMode('signup')}>Créer un compte</button></div>
-          <div className="form c3">
-            {mode === 'signup' && <Field label="Ton nom"><Input value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Théo" /></Field>}
-            <Field label="Email"><Input value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="prenom@societe.fr" /></Field>
-            <Field label="Mot de passe"><Input type="password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="6 caractères minimum" /></Field>
-            <Field label=" "><button className="btn primary" style={{ marginTop: 20 }} disabled={busy || !form.email || form.password.length < 6} onClick={() => run(() => (mode === 'signup' ? api.cloudSignUp(form.email.trim(), form.password, form.name.trim()) : api.cloudSignIn(form.email.trim(), form.password)), mode === 'signup' ? 'Compte créé' : 'Connecté')}>{busy ? 'Un instant…' : mode === 'signup' ? 'Créer mon compte' : 'Se connecter'}</button></Field>
-          </div>
-          <div className="small muted mt">Serveur : {db.settings.cloud.url} · <a style={{ cursor: 'pointer' }} onClick={() => update((d) => ({ ...d, settings: { ...d.settings, cloud: { ...d.settings.cloud, url: '', anonKey: '' } } }))}>changer</a></div>
-        </>
+      {!st?.user ? (
+        <div className="small muted">Pas connecté.</div>
       ) : (
         <>
-          <div className="row-flex small mb"><span>Connecté en tant que <b>{st.user.name || st.user.email}</b> <span className="muted">({st.user.email})</span></span><span style={{ flex: 1 }} /><button className="btn small" disabled={busy} onClick={() => run(() => api.cloudSignOut(), 'Déconnecté')}>Se déconnecter</button></div>
-          {st.orgs.length === 0 ? (
-            <div className="form c2">
-              <Field label="Créer l'espace de ta société"><div className="row-flex"><Input value={orgName} onChange={setOrgName} placeholder="ex. Wall Up" /><button className="btn primary" disabled={busy || !orgName.trim()} onClick={() => run(() => api.cloudCreateOrg(orgName), 'Espace créé — tes données actuelles y sont envoyées')}>Créer</button></div><div className="small muted">Tes données actuelles deviennent l'espace partagé.</div></Field>
-              <Field label="Ou rejoindre un espace existant"><div className="row-flex"><Input value={code} onChange={setCode} placeholder="Code d'invitation (8 caractères)" /><button className="btn" disabled={busy || code.trim().length < 4} onClick={() => run(() => api.cloudJoinOrg(code), 'Espace rejoint — récupération des données…')}>Rejoindre</button></div><div className="small muted">Demande le code à ton associé (il l'a dans cette même page).</div></Field>
-            </div>
-          ) : (
+          <div className="row-flex small mb"><span>Connecté en tant que <b>{st.user.name || st.user.email}</b> <span className="muted">({st.user.email})</span></span><span style={{ flex: 1 }} /><button className="btn small" disabled={busy} onClick={() => act(() => api.cloudSignOut(), 'Déconnecté')}>Se déconnecter</button></div>
+          {active && (
             <>
               <div className="row-flex small mb" style={{ flexWrap: 'wrap', gap: 8 }}>
-                <span>Espace partagé :</span>
-                {st.orgs.length > 1 ? <select value={st.activeOrgId} onChange={(e) => run(() => api.cloudSelectOrg(e.target.value), 'Espace changé')}>{st.orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select> : <b>{active?.name}</b>}
-                {active && <span className="muted">· tu es {isOwner ? 'propriétaire' : 'membre'}</span>}
+                <span>Espace actif :</span>
+                {st.orgs.length > 1 ? <select value={st.activeOrgId} onChange={(e) => act(() => api.cloudSelectOrg(e.target.value), 'Espace changé')}>{st.orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select> : <b>{active.name}</b>}
+                <span className="muted">· tu es {isOwner ? 'propriétaire' : 'membre'}</span>
                 <span style={{ flex: 1 }} />
-                {active && <ConfirmButton label="Quitter cet espace" className="btn ghost small" onConfirm={() => run(() => api.cloudLeaveOrg(active.id), 'Espace quitté')} />}
+                <ConfirmButton label="Quitter cet espace" className="btn ghost small" onConfirm={() => act(() => api.cloudLeaveOrg(active.id), 'Espace quitté')} />
               </div>
-              {active && (
-                <div className="grid c2">
-                  <div>
-                    <div className="small muted">Inviter ton associé</div>
-                    <div className="row-flex" style={{ gap: 8, alignItems: 'center' }}><code style={{ fontSize: 18, letterSpacing: 2, padding: '4px 10px', background: 'var(--accent-soft)', borderRadius: 8 }}>{active.inviteCode}</code><button className="btn small" onClick={() => { navigator.clipboard.writeText(active.inviteCode).then(() => toast('Code copié')); }}>Copier</button>{isOwner && <button className="btn ghost small" disabled={busy} onClick={() => run(() => api.cloudRegenerateCode(), 'Nouveau code généré')} title="Invalide l'ancien code">Régénérer</button>}</div>
-                    <div className="small muted mt">Il installe Docker, met la même URL et la même clé Supabase, crée son compte, puis « Rejoindre un espace » avec ce code.</div>
-                  </div>
-                  <div>
-                    <div className="small muted">Membres ({st.members.length})</div>
-                    {st.members.map((m) => <div key={m.userId} className="small">👤 {m.name || m.email} <span className="muted">· {m.email} · {m.role === 'owner' ? 'propriétaire' : 'membre'}</span></div>)}
-                  </div>
+              <div className="grid c2">
+                <div>
+                  <div className="small muted">Inviter quelqu'un dans cet espace</div>
+                  <div className="row-flex" style={{ gap: 8, alignItems: 'center' }}><code style={{ fontSize: 18, letterSpacing: 2, padding: '4px 10px', background: 'var(--accent-soft)', borderRadius: 8 }}>{active.inviteCode}</code><button className="btn small" onClick={() => { navigator.clipboard.writeText(active.inviteCode).then(() => toast('Code copié')); }}>Copier</button>{isOwner && <button className="btn ghost small" disabled={busy} onClick={() => act(() => api.cloudRegenerateCode(), 'Nouveau code généré')} title="Invalide l'ancien code">Régénérer</button>}</div>
+                  <div className="small muted mt">Il installe Docker, crée son compte, puis « Rejoindre l'espace d'un collègue » avec ce code.</div>
                 </div>
-              )}
-              <div className="small muted mt">Ce qui est partagé : importations, marchandises, usines, commandes, expéditions, transporteurs, documents (PDF), emails récupérés, prix, réglages communs (taux de change, clé Claude). Propre à chaque poste : la connexion Gmail et ces identifiants Supabase. Docker garde une copie locale et fusionne fiche par fiche : deux personnes peuvent travailler en même temps.</div>
-              <div className="form c2 mt">
-                <Field label="Ou rejoindre un autre espace"><div className="row-flex"><Input value={code} onChange={setCode} placeholder="Code d'invitation" /><button className="btn small" disabled={busy || code.trim().length < 4} onClick={() => run(() => api.cloudJoinOrg(code), 'Espace rejoint')}>Rejoindre</button></div></Field>
-                <Field label="Créer un autre espace"><div className="row-flex"><Input value={orgName} onChange={setOrgName} placeholder="Nom" /><button className="btn small" disabled={busy || !orgName.trim()} onClick={() => run(() => api.cloudCreateOrg(orgName), 'Espace créé')}>Créer</button></div></Field>
+                <div>
+                  <div className="small muted">Membres ({st.members.length})</div>
+                  {st.members.map((m) => <div key={m.userId} className="small">👤 {m.name || m.email} <span className="muted">· {m.email} · {m.role === 'owner' ? 'propriétaire' : 'membre'}</span></div>)}
+                </div>
               </div>
             </>
           )}
+          <div className="form c2 mt">
+            <Field label="Rejoindre un autre espace"><div className="row-flex"><Input value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="Code d'invitation" /><button className="btn small" disabled={busy || code.trim().length < 4} onClick={() => act(() => api.cloudJoinOrg(code), 'Espace rejoint')}>Rejoindre</button></div></Field>
+            <Field label="Créer un autre espace"><div className="row-flex"><Input value={orgName} onChange={setOrgName} placeholder="Nom" /><button className="btn small" disabled={busy || !orgName.trim()} onClick={() => act(() => api.cloudCreateOrg(orgName), 'Espace créé')}>Créer</button></div></Field>
+          </div>
+          <div className="small muted mt">Ce qui est partagé dans un espace : importations, marchandises, usines, commandes, expéditions, transporteurs, documents (PDF), emails récupérés, prix, réglages communs (taux de change, clé Claude). Propre à chaque poste : la connexion Gmail. Docker garde une copie locale et fusionne fiche par fiche : plusieurs personnes peuvent travailler en même temps, et l'application fonctionne hors ligne.</div>
         </>
       )}
     </div>
