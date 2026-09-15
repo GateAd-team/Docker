@@ -28,7 +28,10 @@ const api: DockerApi = {
   cloudSelectOrg: (orgId) => ipcRenderer.invoke('cloud:selectOrg', orgId),
   cloudLeaveOrg: (orgId) => ipcRenderer.invoke('cloud:leaveOrg', orgId),
   cloudRegenerateCode: () => ipcRenderer.invoke('cloud:regenerateCode'),
+  cloudUpdateAccount: (patch) => ipcRenderer.invoke('cloud:updateAccount', patch),
+  fetchRates: () => ipcRenderer.invoke('fx:fetch'),
   cloudSyncNow: () => ipcRenderer.invoke('cloud:syncNow'),
+  cloudPushLocal: () => ipcRenderer.invoke('cloud:pushLocal'),
   onRemoteDb: (cb) => { const h = (_e: unknown, d: Database) => cb(d); ipcRenderer.on('db:remote', h); return () => ipcRenderer.removeListener('db:remote', h); },
 };
 // Statut cloud poussé par le principal (connexion, synchro en cours, erreurs) : écouté par Réglages.

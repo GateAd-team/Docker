@@ -11,13 +11,16 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
-    "dist": "npm run build && electron-builder",
+    "dist": "npm run build && electron-builder --publish never",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never"
   },
   "build": {
     "appId": "com.budinbox.docker",
     "productName": "Docker",
+    "artifactName": "Docker-${version}-${os}-${arch}.${ext}",
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -25,27 +28,68 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "build/icon.png", "to": "build/icon.png" }
+      {
+        "from": "build/icon.png",
+        "to": "build/icon.png"
+      }
     ],
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "mac": {
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
-      "category": "public.app-category.business"
+      "icon": "build/icon.icns",
+      "category": "public.app-category.business",
+      "artifactName": "Docker-${version}-mac.${ext}"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "target": [
-        "nsis"
-      ]
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Docker-${version}-windows-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Docker",
+      "language": "1036"
     },
     "linux": {
       "target": [
         "AppImage"
-      ]
-    }
+      ],
+      "icon": "build/icon.png"
+    },
+    "publish": null
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
@@ -69,5 +113,6 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
-  }
+  },
+  "author": "BudinBox"
 }

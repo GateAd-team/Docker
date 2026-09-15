@@ -1,3 +1,4 @@
+import logoUrl from './assets/logo.png';
 import React, { createContext, useContext, useState } from 'react';
 import { api } from './api';
 import { useStore } from './store';
@@ -85,7 +86,7 @@ function Workspace() {
       <ViewerProvider>
       <div className="app">
         <aside className="sidebar">
-          <div className="brand"><div className="logo">D</div><div>Docker<small>Import Chine · BudinBox</small></div></div>
+          <div className="brand"><img className="logo" src={logoUrl} alt="" /><div>Docker<small>Import Chine · BudinBox</small></div></div>
           <nav>
             {PAGES.map((p) => (
               <button key={p.page} className={nav.page === p.page ? 'active' : ''} onClick={() => go(p.page)}>

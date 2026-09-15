@@ -34,7 +34,7 @@ h3 { font-size: 14px; margin: 0 0 8px; font-weight: 600; color: var(--muted); te
   display: flex; flex-direction: column; padding: 16px 12px; -webkit-app-region: drag;
 }
 .sidebar .brand { padding: 22px 12px 18px; font-weight: 700; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
-.sidebar .brand .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #22c55e); display: grid; place-items: center; color: #fff; font-size: 14px; }
+.sidebar .brand .logo { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #fff; padding: 2px; }
 .sidebar .brand small { display: block; font-size: 11px; font-weight: 400; color: #9ca3af; }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; -webkit-app-region: no-drag; }
 .sidebar nav button {
@@ -379,7 +379,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .auth { display: flex; min-height: 100%; background: var(--panel); }
 .auth-side { width: 42%; max-width: 520px; flex: none; background: #111827; color: #d1d5db; padding: 44px 40px 28px; display: flex; flex-direction: column; -webkit-app-region: drag; }
 .auth-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: #fff; }
-.auth-brand .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #3b82f6, #22c55e); display: grid; place-items: center; color: #fff; font-size: 16px; }
+.auth-brand .logo { width: 44px; height: 44px; border-radius: 9px; object-fit: contain; background: #fff; padding: 2px; }
 .auth-brand small { display: block; font-size: 11px; font-weight: 400; color: #9ca3af; }
 .auth-pitch { margin: auto 0; padding: 40px 0; }
 .auth-pitch h1 { color: #fff; font-size: 26px; line-height: 1.25; margin: 0 0 28px; letter-spacing: -0.015em; }
@@ -435,3 +435,21 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .choice b { font-size: 14.5px; }
 .choice-form { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); animation: auth-in 0.25s ease-out both; }
 .code-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 20px !important; letter-spacing: 0.32em; text-transform: uppercase; text-align: center; }
+
+/* Marchandise : liste à gauche + fiche à droite */
+.split { display: flex; align-items: stretch; min-height: 100%; }
+.split-list { width: 260px; flex: none; border-right: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
+.split-list-head { display: flex; gap: 6px; align-items: center; padding: 10px 10px 6px; }
+.split-list-body { flex: 1; overflow: auto; padding-bottom: 20px; }
+.split-group { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 10px 12px 4px; }
+.split-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; border-left: 3px solid transparent; }
+.split-item:hover { background: #f8fafc; }
+.split-item.active { background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+.split-item .split-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-item .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.split-thumb { width: 28px; height: 28px; border-radius: 6px; background: #eef0f3; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
+.split-main { flex: 1; min-width: 0; }
+.product-photo { width: 96px; height: 96px; border-radius: 12px; object-fit: cover; border: 1px solid var(--line); background: #fff; cursor: zoom-in; flex: none; }
+.product-photo-empty { width: 96px; height: 96px; border-radius: 12px; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; text-align: center; cursor: pointer; flex: none; background: #fafbfc; }
+.product-photo-empty:hover { border-color: var(--accent); color: var(--accent); }
+table.tbl tr.group-row td { background: #f3f5f8; font-size: 12px; padding: 6px 12px; border-top: 1px solid var(--line); }

@@ -32,6 +32,18 @@ Première utilisation : **Réglages → clé API Anthropic** (créée sur consol
 Sans clé, tout fonctionne sauf l'analyse automatique des documents. La clé est partagée avec les autres comptes.
 « Charger les données d'exemple » dans Réglages permet de voir l'app remplie.
 
+## Installeurs (Windows / Mac)
+
+Le dépôt GitHub compile automatiquement les installeurs (`.github/workflows/build.yml`) : à chaque push sur
+`main`, GitHub produit le `.exe` Windows et le `.dmg` Mac et les publie dans la page **Releases** du dépôt
+(release `v<version>` du `package.json`). Pour livrer une nouvelle version : changer `version` dans
+`package.json`, commit, push. Compilation locale possible avec `npm run dist:win` (sur PC) ou `npm run dist:mac` (sur Mac).
+
+Le `.dmg` n'est pas encore signé : au premier lancement sur Mac, clic droit → Ouvrir, ou
+`xattr -dr com.apple.quarantine /Applications/Docker.app`. Pour signer/notariser, ajouter les secrets
+`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` au dépôt et retirer
+`CSC_IDENTITY_AUTO_DISCOVERY` du workflow.
+
 ## Architecture
 
 ```

@@ -32,7 +32,7 @@ export class Cloud {
   private client: SupabaseClient | null = null;
   private url = ''; private key = '';
   private channel: RealtimeChannel | null = null;
-  private status: CloudStatus = { ready: false, configured: false, user: null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
+  private status: CloudStatus = { ready: false, configured: false, user: null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '', remoteCounts: {}, filesUploaded: 0, filesLocal: 0 };
   private pushTimer: NodeJS.Timeout | null = null;
   private busy: Promise<void> = Promise.resolve();
   private deps: Deps;
@@ -152,6 +152,29 @@ export class Cloud {
     if (this.status.activeOrgId === orgId) { this.unsubscribe(); this.status.activeOrgId = ''; const db = this.deps.getDb(); this.deps.setDb({ ...db, settings: { ...db.settings, cloud: { ...db.settings.cloud, orgId: '', orgName: '' } } }, false); }
     return this.refresh();
   }
+  /** Modifie nom / email / mot de passe du compte connecté. */
+  async updateAccount(patch: { name?: string; email?: string; password?: string; currentPassword?: string }): Promise<CloudStatus> {
+    const c = this.need();
+    if (!this.status.user) throw new Error('Non connecté');
+    if ((patch.password || patch.email) && patch.currentPassword) {
+      const { error } = await c.auth.signInWithPassword({ email: this.status.user.email, password: patch.currentPassword });
+      if (error) throw new Error('Mot de passe actuel incorrect.');
+    }
+    if (patch.name !== undefined) {
+      const { error } = await c.from('profiles').update({ name: patch.name.trim() }).eq('id', this.status.user.id);
+      if (error) throw new Error(describe(error.message));
+    }
+    if (patch.email || patch.password) {
+      const { error } = await c.auth.updateUser({ ...(patch.email ? { email: patch.email.trim() } : {}), ...(patch.password ? { password: patch.password } : {}) });
+      if (error) throw new Error(describe(error.message));
+      if (patch.email) {
+        const { data: prof } = await c.from('profiles').update({ email: patch.email.trim() }).eq('id', this.status.user.id).select('email').maybeSingle();
+        void prof;
+      }
+    }
+    return this.refresh();
+  }
+
   async regenerateCode(): Promise<CloudStatus> {
     const c = this.need();
     const { error } = await c.rpc('regenerate_invite_code', { p_org: this.status.activeOrgId });
@@ -166,6 +189,17 @@ export class Cloud {
     if (!this.client || !this.status.user || !this.status.activeOrgId) return;
     if (this.pushTimer) clearTimeout(this.pushTimer);
     this.pushTimer = setTimeout(() => { this.pushTimer = null; this.sync().catch((e) => this.fail(e)); }, 1500);
+  }
+
+  /**
+   * Envoi forcé de tout ce poste vers l'espace : on oublie la « base » de fusion (tout le local compte comme nouveau) et on refait
+   * l'envoi des fichiers. Rien n'est écrasé côté serveur : les fiches sont fusionnées id par id, le local gagne en cas de conflit.
+   */
+  async pushLocal(): Promise<void> {
+    if (!this.client || !this.status.user || !this.status.activeOrgId) throw new Error('Connecte-toi et choisis un espace avant d\'envoyer les données.');
+    this.writeBase(emptyShared());
+    try { fs.unlinkSync(uploadedPath()); } catch { /* absent */ }
+    await this.sync();
   }
 
   /** Synchro complète : lit le serveur, fusionne avec le local, renvoie le résultat au serveur (avec vérification de version), puis les fichiers. */
@@ -193,6 +227,7 @@ export class Cloud {
             this.status.version = row.version;
           } else this.status.version = remoteVersion;
           this.writeBase(toShared(merged.db) as unknown as Database);
+          this.status.remoteCounts = Object.fromEntries(Object.entries(toShared(merged.db)).filter(([k, v]) => k !== 'settings' && k !== 'version' && Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).length]));
           break;
         }
         this.status.lastSync = new Date().toISOString();
@@ -218,6 +253,8 @@ export class Cloud {
       uploaded.add(doc.id); changed = true;
     }
     if (changed) fs.writeFileSync(uploadedPath(), JSON.stringify([...uploaded]));
+    this.status.filesUploaded = uploaded.size;
+    this.status.filesLocal = this.deps.getDb().documents.filter((d) => { const l = localFilePath(d); return (l && fs.existsSync(l)) || (d.storedPath && fs.existsSync(d.storedPath)); }).length;
   }
 
   /** Garantit qu'un document est disponible sur ce poste (téléchargé depuis le serveur si besoin). Renvoie son chemin local ou null. */
@@ -264,6 +301,8 @@ function describe(msg: string): string {
   if (/Email not confirmed/i.test(msg)) return 'Adresse email pas encore confirmée : ouvre le lien reçu par email.';
   if (/User already registered/i.test(msg)) return 'Un compte existe déjà avec cette adresse : connecte-toi.';
   if (/Password should be/i.test(msg)) return 'Mot de passe trop court (6 caractères minimum).';
+  if (/New password should be different/i.test(msg)) return 'Le nouveau mot de passe doit être différent de l\'actuel.';
+  if (/email.*already|already.*email/i.test(msg)) return 'Cette adresse email est déjà utilisée par un autre compte.';
   if (/fetch failed|ENOTFOUND|ECONN/i.test(msg)) return 'Impossible de joindre le serveur : vérifie la connexion internet.';
   return msg;
 }

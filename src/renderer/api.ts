@@ -57,7 +57,7 @@ function demoExtraction(doc: DocumentRecord): ExtractionResult {
   };
 }
 
-const demoCloud: CloudStatus = { ready: true, configured: false, user: new URLSearchParams(window.location.search).get('screen') === 'workspace' ? { id: 'demo', email: 'theo@wallup.fr', name: 'Théo' } : null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '' };
+const demoCloud: CloudStatus = { ready: true, configured: false, user: new URLSearchParams(window.location.search).get('screen') === 'workspace' ? { id: 'demo', email: 'theo@wallup.fr', name: 'Théo' } : null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '', remoteCounts: {}, filesUploaded: 0, filesLocal: 0 };
 
 const demoApi: DockerApi = {
   isDemo: true,
@@ -140,7 +140,10 @@ const demoApi: DockerApi = {
   async cloudSelectOrg() { return demoCloud; },
   async cloudLeaveOrg() { return demoCloud; },
   async cloudRegenerateCode() { return demoCloud; },
+  async cloudUpdateAccount() { return demoCloud; },
+  async fetchRates() { try { const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,CNY'); const j = await r.json() as { date: string; rates: Record<string, number> }; return { date: j.date, rates: Object.fromEntries(Object.entries(j.rates).map(([k, v]) => [k, Math.round((1 / v) * 10000) / 10000])) }; } catch { return null; } },
   async cloudSyncNow() { return demoCloud; },
+  async cloudPushLocal() { return demoCloud; },
   onRemoteDb() { return () => undefined; },
   async chat(messages) {
     await new Promise((r) => setTimeout(r, 600));

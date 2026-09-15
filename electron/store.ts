@@ -8,8 +8,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { emptyDatabase, normalizeDatabase, type Database, type DocumentRecord } from '../src/shared/types';
 
+let migrated = false;
+
 export function dataDir(): string {
   const dir = path.join(app.getPath('userData'), 'docker-data');
+  // Version installée (dossier "Docker") lancée pour la première fois sur un poste qui utilisait la version
+  // de développement (dossier "docker-import-manager") : on récupère les données existantes.
+  if (!migrated) {
+    migrated = true;
+    const legacy = path.join(path.dirname(app.getPath('userData')), 'docker-import-manager', 'docker-data');
+    if (!fs.existsSync(path.join(dir, 'database.json')) && fs.existsSync(path.join(legacy, 'database.json'))) {
+      try { fs.cpSync(legacy, dir, { recursive: true }); } catch (e) { console.error('Migration des données impossible', e); }
+    }
+  }
   fs.mkdirSync(path.join(dir, 'files'), { recursive: true });
   return dir;
 }

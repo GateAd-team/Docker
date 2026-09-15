@@ -1,11 +1,12 @@
 import React from 'react';
+import logoUrl from '../assets/logo.png';
 
 /** Habillage commun des écrans d'accueil (connexion, choix de l'espace) : panneau de marque à gauche, contenu à droite. */
 export function AuthShell({ children, footer, wide }: { children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   return (
     <div className="auth">
       <aside className="auth-side">
-        <div className="auth-brand"><div className="logo">D</div><div>Docker<small>Import Chine · BudinBox</small></div></div>
+        <div className="auth-brand"><img className="logo" src={logoUrl} alt="" /><div>Docker<small>Import Chine · BudinBox</small></div></div>
         <div className="auth-pitch">
           <h1>Tes importations, du plan technique à la marge.</h1>
           <ul>

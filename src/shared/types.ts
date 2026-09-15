@@ -124,6 +124,8 @@ export interface Product {
   components: ProductComponent[]; // sous-références et quantités
   /** Vrai si le prix usine de cette référence comprend déjà ses sous-références (l'usine fournit tout). */
   componentsIncludedInPrice: boolean;
+  /** Photo de la marchandise : id d'un document image (synchronisé comme les PDF). */
+  photoDocumentId?: string | null;
   /** Produit final : ce qui se vend et arrive en France dans le conteneur (par opposition aux composants / matières). */
   isFinished?: boolean;
   /** Coûts additionnels par unité : assemblage, transport interne, réparation, contrôle qualité, emballage… */
@@ -303,6 +305,10 @@ export interface Settings {
   model: string;
   /** Taux de change : combien vaut 1 unité de la devise en EUR. */
   fxToEur: Record<Currency, number>;
+  /** Date de la dernière mise à jour automatique des taux (AAAA-MM-JJ). */
+  fxUpdatedAt?: string;
+  /** Mettre à jour les taux automatiquement à chaque ouverture (défaut : oui). */
+  fxAuto?: boolean;
   defaultDutyRatePct: number;
   defaultVat: Record<Market, number>;
   /** Signature des messages de négociation. */
@@ -488,7 +494,13 @@ export interface DockerApi {
   cloudSelectOrg(orgId: string): Promise<CloudStatus>;
   cloudLeaveOrg(orgId: string): Promise<CloudStatus>;
   cloudRegenerateCode(): Promise<CloudStatus>;
+  /** Modifier son compte : nom, email (confirmation par email selon les réglages Supabase), mot de passe. */
+  cloudUpdateAccount(patch: { name?: string; email?: string; password?: string; currentPassword?: string }): Promise<CloudStatus>;
+  /** Taux de change du jour (EUR pour 1 unité) depuis un service public ; null si hors ligne. */
+  fetchRates(): Promise<{ rates: Partial<Record<Currency, number>>; date: string } | null>;
   cloudSyncNow(): Promise<CloudStatus>;
+  /** Force l'envoi de toutes les données de ce poste vers l'espace (fusion complète, rien n'est écrasé côté serveur). */
+  cloudPushLocal(): Promise<CloudStatus>;
   /** Le poste reçoit une base fusionnée depuis le serveur (temps réel ou après une synchro). */
   onRemoteDb(cb: (db: Database) => void): () => void;
   isDemo: boolean;
@@ -506,4 +518,9 @@ export interface CloudStatus {
   lastSync: string;
   syncing: boolean;
   error: string;
+  /** Dernier état connu de l'espace sur le serveur : nombre de fiches par collection (après la dernière synchro). */
+  remoteCounts: Record<string, number>;
+  /** Fichiers envoyés sur le serveur / fichiers présents localement. */
+  filesUploaded: number;
+  filesLocal: number;
 }

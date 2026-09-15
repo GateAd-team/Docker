@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { newId, today, useStore } from '../store';
 import { useNav } from '../App';
 import { useViewer } from '../components/Viewer';
+import { api, fileToPayload } from '../api';
 import { Badge, ConfirmButton, Empty, Field, Input, Modal, NumberInput, Select, Tabs, Textarea, fmtDate } from '../components/ui';
 import { DRAWING_STATUS, ORDER_STATUS, statusOf } from '../labels';
 import { MarketForm } from '../components/MarketForm';
@@ -164,7 +165,12 @@ export function MerchandisePage() {
     setCreating(null); setNewPrice({ unitPrice: 0, currency: 'USD', sellHt: 0 }); toast('Référence créée'); go('merchandise', creating.id);
   };
 
-  if (selectedProduct) return <ProductDetail product={selectedProduct} />;
+  if (selectedProduct) return (
+    <div className="split">
+      <ProductSideList current={selectedProduct} />
+      <div className="split-main"><ProductDetail product={selectedProduct} /></div>
+    </div>
+  );
 
   /* --- arbre gauche (récursif) --- */
   const TreeNode = ({ f, depth }: { f: Folder; depth: number }) => {
@@ -529,10 +535,13 @@ function ProductDetail({ product }: { product: Product }) {
   return (
     <div className="page">
       <div className="breadcrumb"><a onClick={() => go('merchandise')}>Marchandise</a>{parents.map((pp) => <span key={pp.id}> › <a onClick={() => go('merchandise', pp.id)}>{pp.name}</a></span>)} › {product.name}</div>
-      <div className="page-head">
-        <div>
+      <div className="page-head" style={{ flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flex: '1 1 480px', minWidth: 0 }}>
+        <ProductPhoto product={product} />
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1>{product.name} <Badge tone={isCurrentV ? 'green' : 'amber'}>{product.version}{isCurrentV ? ' · actuelle' : ' · ancienne version'}</Badge> {product.folderId && <Badge>{folderPath(db.folders, product.folderId)}</Badge>}</h1>
           <div className="sub">{[product.sku, product.supplierName && `chez l'usine : « ${product.supplierName} »`, factory ? `Fabriquée par ${factory.name}` : product.components.length ? 'Assemblée à partir de sous-références' : null].filter(Boolean).join(' · ')}</div>
+        </div>
         </div>
         <div className="actions">
           <button className="btn" title="Créer la version suivante de cette référence (nouveau procédé, nouvelle usine…)" onClick={() => { const r = createNextVersion(db, product.id); if (r) { replace(r.db); toast(`${nextVersionLabel(db.products, product.familyId || product.id)} créée — note ce qui change dans l'onglet Versions`); go('merchandise', r.newId); } }}>🔁 Nouvelle version</button>
@@ -917,3 +926,85 @@ function isAncestor(candidateId: string, productId: string, products: Product[],
   return !!c && c.components.some((x) => isAncestor(x.productId, productId, products, seen));
 }
 
+
+
+/** Liste compacte des marchandises à gauche de la fiche : on change de marchandise sans repasser par le catalogue. */
+function ProductSideList({ current }: { current: Product }) {
+  const { db } = useStore();
+  const { go } = useNav();
+  const [q, setQ] = useState('');
+  const [onlyCurrent, setOnlyCurrent] = useState(true);
+  const isCurrent = (p: Product) => currentVersion(db.products, p.familyId || p.id)?.id === p.id;
+  const list = db.products
+    .filter((p) => (!onlyCurrent || isCurrent(p) || p.id === current.id) && (!q || `${p.name} ${p.supplierName} ${p.sku}`.toLowerCase().includes(q.toLowerCase())))
+    .sort((a, b) => (folderPath(db.folders, a.folderId) || '').localeCompare(folderPath(db.folders, b.folderId) || '') || a.name.localeCompare(b.name));
+  const groups: { folder: string; items: Product[] }[] = [];
+  for (const p of list) { const f = p.folderId ? folderPath(db.folders, p.folderId) : 'Racine'; const g = groups.find((x) => x.folder === f); if (g) g.items.push(p); else groups.push({ folder: f, items: [p] }); }
+  React.useEffect(() => { document.getElementById(`side-${current.id}`)?.scrollIntoView({ block: 'nearest' }); }, [current.id]);
+  return (
+    <aside className="split-list">
+      <div className="split-list-head">
+        <button className="btn ghost small" onClick={() => go('merchandise')}>◀ Catalogue</button>
+        <input className="search" placeholder="Filtrer…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
+      </div>
+      <label className="small muted row-flex" style={{ gap: 6, padding: '0 10px 6px' }}><input type="checkbox" checked={onlyCurrent} onChange={(e) => setOnlyCurrent(e.target.checked)} /> versions actuelles seulement</label>
+      <div className="split-list-body">
+        {groups.map((g) => (
+          <div key={g.folder}>
+            <div className="split-group">{g.folder}</div>
+            {g.items.map((p) => (
+              <div key={p.id} id={`side-${p.id}`} className={`split-item${p.id === current.id ? ' active' : ''}`} onClick={() => go('merchandise', p.id)} title={p.supplierName || p.name}>
+                {p.photoDocumentId ? <ProductThumb documentId={p.photoDocumentId} size={28} /> : <span className="split-thumb">{p.isFinished ? '📦' : '▫'}</span>}
+                <span className="split-name">{p.name}{p.version !== 'V1' ? <span className="muted"> {p.version}</span> : null}</span>
+                {p.isFinished && <span className="dot" title="produit final" />}
+              </div>
+            ))}
+          </div>
+        ))}
+        {list.length === 0 && <div className="small muted" style={{ padding: 10 }}>Aucune marchandise.</div>}
+      </div>
+    </aside>
+  );
+}
+
+/** Vignette d'un document image (photo de marchandise), chargée à la demande. */
+export function ProductThumb({ documentId, size = 28, onClick }: { documentId: string; size?: number; onClick?: () => void }) {
+  const [src, setSrc] = useState<string | null>(null);
+  React.useEffect(() => { let alive = true; api.readDocumentBase64(documentId).then((r) => { if (alive && r) setSrc(`data:${r.mimeType};base64,${r.base64}`); }).catch(() => undefined); return () => { alive = false; }; }, [documentId]);
+  return src ? <img src={src} alt="" onClick={onClick} style={{ width: size, height: size, objectFit: 'cover', borderRadius: 6, flex: 'none', cursor: onClick ? 'zoom-in' : undefined, border: '1px solid var(--line)' }} /> : <span className="split-thumb" style={{ width: size, height: size }} />;
+}
+
+
+/** Photo de la marchandise : vignette dans l'en-tête, ajout / remplacement par choix de fichier, glisser-déposer ou collage (Ctrl+V), agrandissement au clic. */
+function ProductPhoto({ product }: { product: Product }) {
+  const { update, toast } = useStore();
+  const { open: openDoc } = useViewer();
+  const [busy, setBusy] = useState(false);
+  const setPhoto = async (file: File) => {
+    if (!file.type.startsWith('image/')) { toast('Choisis une image (PNG, JPG, WebP)', true); return; }
+    setBusy(true);
+    try {
+      const docs = await api.importDropped([{ ...(await fileToPayload(file)), name: file.name || `photo-${product.sku || product.name}.png` }]);
+      const doc = docs[0]; if (!doc) return;
+      update((d) => ({ ...d, documents: [{ ...doc, kind: 'autre', summary: `Photo de ${product.name}`, extracted: { photo: true }, linkedTo: [{ type: 'product', id: product.id }] }, ...d.documents.filter((x) => x.id !== product.photoDocumentId)], products: d.products.map((p) => (p.id === product.id ? { ...p, photoDocumentId: doc.id } : p)) }));
+      toast('Photo enregistrée');
+    } finally { setBusy(false); }
+  };
+  const pick = () => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = () => { const f = input.files?.[0]; if (f) setPhoto(f); }; input.click(); };
+  const onDrop = (e: React.DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setPhoto(f); };
+  return (
+    <div onDragOver={(e) => e.preventDefault()} onDrop={onDrop} style={{ position: 'relative' }} title="Clic : agrandir · glisse une image ici pour la remplacer">
+      {product.photoDocumentId ? (
+        <>
+          <ProductThumb documentId={product.photoDocumentId} size={96} onClick={() => openDoc(product.photoDocumentId!)} />
+          <div className="row-flex" style={{ gap: 4, marginTop: 4 }}>
+            <button className="btn ghost small" disabled={busy} onClick={pick}>Changer</button>
+            <button className="btn ghost small" onClick={() => update((d) => ({ ...d, products: d.products.map((p) => (p.id === product.id ? { ...p, photoDocumentId: null } : p)) }))}>✕</button>
+          </div>
+        </>
+      ) : (
+        <div className="product-photo-empty" onClick={pick}>{busy ? <span className="spinner" /> : <>📷<br />Ajouter<br />une photo</>}</div>
+      )}
+    </div>
+  );
+}

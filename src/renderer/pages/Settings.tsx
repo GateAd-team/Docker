@@ -142,7 +142,12 @@ export function SettingsPage() {
         <div className="form c4">
           {(['USD', 'GBP', 'CNY'] as Currency[]).map((c) => <Field key={c} label={`1 ${c} =`}><NumberInput value={s.fxToEur[c]} onChange={(v) => setS({ ...s, fxToEur: { ...s.fxToEur, [c]: v } })} unit="EUR" /></Field>)}
         </div>
-        <div className="small muted mt">Mets-les à jour de temps en temps : tous les coûts de revient et marges sont recalculés avec ces taux.</div>
+        <div className="row-flex small mt" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <label className="row-flex" style={{ gap: 6 }}><input type="checkbox" checked={s.fxAuto !== false} onChange={(e) => { const next = { ...s, fxAuto: e.target.checked }; setS(next); update((d) => ({ ...d, settings: { ...d.settings, fxAuto: e.target.checked } })); }} /> Mettre à jour automatiquement à chaque ouverture de Docker (taux de la Banque centrale européenne)</label>
+          <span className="muted">{db.settings.fxUpdatedAt ? `Derniers taux du ${new Date(db.settings.fxUpdatedAt).toLocaleDateString('fr-FR')}` : 'Pas encore mis à jour automatiquement'}</span>
+          <button className="btn small" onClick={async () => { const r = await api.fetchRates(); if (!r) { toast('Impossible de récupérer les taux (hors ligne ?)', true); return; } const fx = { ...s.fxToEur, ...r.rates } as Settings['fxToEur']; setS({ ...s, fxToEur: fx, fxUpdatedAt: r.date }); update((d) => ({ ...d, settings: { ...d.settings, fxToEur: { ...d.settings.fxToEur, ...r.rates }, fxUpdatedAt: r.date } })); toast(`Taux du ${new Date(r.date).toLocaleDateString('fr-FR')} appliqués`); }}>↻ Actualiser maintenant</button>
+        </div>
+        <div className="small muted mt">Tous les coûts de revient et marges sont recalculés avec ces taux. Tu peux les corriger à la main (par ex. pour figer le taux d'un virement).</div>
       </div>
 
       <div className="card">
@@ -170,10 +175,11 @@ export function SettingsPage() {
 
 /** Compte & espaces de travail : qui est connecté, espace actif (code d'invitation, membres), changer / rejoindre / créer / quitter un espace. Le serveur est intégré à l'application (cloudConfig.ts). */
 function CloudCard() {
-  const { toast } = useStore();
+  const { db, toast } = useStore();
   const { status: st, run, busy } = useCloud();
   const [orgName, setOrgName] = useState('');
   const [code, setCode] = useState('');
+  const [acc, setAcc] = useState<{ name: string; email: string; password: string; password2: string; current: string } | null>(null);
   const act = async (fn: () => Promise<CloudStatus>, okMsg: string) => { const err = await run(fn); if (err) toast(err, true); else { toast(okMsg); setOrgName(''); setCode(''); } };
   const active = st?.orgs.find((o) => o.id === st.activeOrgId);
   const isOwner = active?.role === 'owner';
@@ -193,7 +199,20 @@ function CloudCard() {
         <div className="small muted">Pas connecté.</div>
       ) : (
         <>
-          <div className="row-flex small mb"><span>Connecté en tant que <b>{st.user.name || st.user.email}</b> <span className="muted">({st.user.email})</span></span><span style={{ flex: 1 }} /><button className="btn small" disabled={busy} onClick={() => act(() => api.cloudSignOut(), 'Déconnecté')}>Se déconnecter</button></div>
+          <div className="row-flex small mb"><span>Connecté en tant que <b>{st.user.name || st.user.email}</b> <span className="muted">({st.user.email})</span></span><span style={{ flex: 1 }} /><button className="btn small" onClick={() => setAcc(acc ? null : { name: st.user!.name, email: st.user!.email, password: '', password2: '', current: '' })}>{acc ? 'Fermer' : '✎ Modifier mon compte'}</button><button className="btn small" disabled={busy} onClick={() => act(() => api.cloudSignOut(), 'Déconnecté')}>Se déconnecter</button></div>
+          {acc && (
+            <div className="mb" style={{ padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 10 }}>
+              <div className="form c3">
+                <Field label="Nom"><Input value={acc.name} onChange={(v) => setAcc({ ...acc, name: v })} /></Field>
+                <Field label="Adresse email"><Input value={acc.email} onChange={(v) => setAcc({ ...acc, email: v })} /></Field>
+                <Field label="Mot de passe actuel (pour changer l'email ou le mot de passe)"><Input type="password" value={acc.current} onChange={(v) => setAcc({ ...acc, current: v })} /></Field>
+                <Field label="Nouveau mot de passe"><Input type="password" value={acc.password} onChange={(v) => setAcc({ ...acc, password: v })} placeholder="6 caractères minimum" /></Field>
+                <Field label="Confirmer le nouveau mot de passe"><Input type="password" value={acc.password2} onChange={(v) => setAcc({ ...acc, password2: v })} /></Field>
+                <Field label=" "><button className="btn primary" style={{ marginTop: 20 }} disabled={busy || (!!acc.password && (acc.password.length < 6 || acc.password !== acc.password2)) || ((!!acc.password || acc.email.trim() !== st.user!.email) && !acc.current)} onClick={() => { const patch: { name?: string; email?: string; password?: string; currentPassword?: string } = {}; if (acc.name.trim() !== st.user!.name) patch.name = acc.name; if (acc.email.trim() && acc.email.trim() !== st.user!.email) patch.email = acc.email; if (acc.password) patch.password = acc.password; if (acc.current) patch.currentPassword = acc.current; act(() => api.cloudUpdateAccount(patch), patch.email ? 'Compte mis à jour — si la confirmation par email est activée, valide le lien reçu sur les deux adresses' : 'Compte mis à jour').then(() => setAcc(null)); }}>Enregistrer</button></Field>
+              </div>
+              {acc.password && acc.password !== acc.password2 && <div className="small" style={{ color: 'var(--bad)' }}>Les deux mots de passe ne correspondent pas.</div>}
+            </div>
+          )}
           {active && (
             <>
               <div className="row-flex small mb" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -203,6 +222,23 @@ function CloudCard() {
                 <span style={{ flex: 1 }} />
                 <ConfirmButton label="Quitter cet espace" className="btn ghost small" onConfirm={() => act(() => api.cloudLeaveOrg(active.id), 'Espace quitté')} />
               </div>
+              {(() => {
+                const local: Record<string, number> = { projects: db.projects.length, products: db.products.length, factories: db.factories.length, orders: db.orders.length, shipments: db.shipments.length, documents: db.documents.length, mails: db.mails.length };
+                const labels: Record<string, string> = { projects: 'importations', products: 'marchandises', factories: 'usines', orders: 'commandes', shipments: 'expéditions', documents: 'documents', mails: 'emails' };
+                const remote = st.remoteCounts ?? {};
+                const synced = !!st.lastSync && Object.keys(local).every((k) => (remote[k] ?? 0) >= local[k]);
+                return (
+                  <div className="mb" style={{ padding: '10px 14px', borderRadius: 10, background: synced ? 'var(--ok-soft)' : 'var(--warn-soft)' }}>
+                    <div className="row-flex small" style={{ flexWrap: 'wrap', gap: 10 }}>
+                      <b>{synced ? '✅ Tes données sont sur l\'espace partagé' : st.lastSync ? '⚠️ Des données de ce poste ne sont pas encore sur l\'espace' : '⏳ Pas encore synchronisé'}</b>
+                      <span className="muted">— sur le serveur : {Object.keys(local).map((k) => `${remote[k] ?? 0} ${labels[k]}`).join(', ')}{st.filesLocal ? ` · fichiers envoyés ${st.filesUploaded}/${st.filesLocal}` : ''}</span>
+                      <span style={{ flex: 1 }} />
+                      <button className="btn primary small" disabled={busy || st.syncing} title="Fusionne tout ce qui est sur cet ordinateur dans l'espace partagé (rien n'est effacé côté serveur) et renvoie les PDF manquants" onClick={() => act(() => api.cloudPushLocal(), 'Données de ce poste envoyées sur l\'espace')}>⇡ Envoyer les données de ce poste</button>
+                    </div>
+                    <div className="small muted mt">Sur cet ordinateur : {Object.keys(local).map((k) => `${local[k]} ${labels[k]}`).join(', ')}. Ton associé voit tout ça dès qu'il rejoint l'espace avec le code ci-dessous.</div>
+                  </div>
+                );
+              })()}
               <div className="grid c2">
                 <div>
                   <div className="small muted">Inviter quelqu'un dans cet espace</div>

@@ -19,10 +19,10 @@ describe('fusion à trois voies', () => {
     const { rows } = mergeCollection(base, local, remote);
     expect(rows).toEqual([{ id: 'a', v: 2 }, { id: 'b', v: 9 }]);
   });
-  it('fusionne une base complète ; les réglages Gmail et cloud restent locaux, la clé API est partagée', () => {
+  it('fusionne une base complète ; les réglages Gmail restent locaux, la clé API est partagée', () => {
     const base = emptyDatabase();
     const local: Database = { ...emptyDatabase(), factories: [fac('f1', 'Kuo Ching')] };
-    local.settings = { ...local.settings, gmail: { ...local.settings.gmail, email: 'theo@x.fr' }, cloud: { ...local.settings.cloud, orgId: 'org-x' } };
+    local.settings = { ...local.settings, gmail: { ...local.settings.gmail, email: 'theo@x.fr' } };
     const remoteDb: Database = { ...emptyDatabase(), factories: [fac('f2', 'Vangarden')] };
     remoteDb.settings = { ...remoteDb.settings, anthropicApiKey: 'sk-shared' };
     const remote = toShared(remoteDb) as Partial<Database>;
@@ -31,7 +31,6 @@ describe('fusion à trois voies', () => {
     expect(m.db.factories.map((f) => f.id).sort()).toEqual(['f1', 'f2']);
     expect(m.db.settings.anthropicApiKey).toBe('sk-shared');
     expect(m.db.settings.gmail.email).toBe('theo@x.fr');
-    expect(m.db.settings.cloud.orgId).toBe('org-x');
     expect(m.localChanges).toBe(true); expect(m.remoteChanges).toBe(true);
   });
   it('rien à faire quand tout est identique', () => {

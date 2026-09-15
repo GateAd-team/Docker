@@ -117,7 +117,20 @@ export function DocumentsPage() {
   const [kindFilter, setKindFilter] = useState<'tous' | DocumentKind>('tous');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [byProject, setByProject] = useState(true);
+  /** Importation à laquelle un document se rattache : via sa commande, via les liens de l'arborescence, ou via linkedTo. */
+  const projectOf = (d: DocumentRecord): string | null => {
+    const o = db.orders.find((x) => x.proformaDocumentId === d.id || x.invoiceDocumentId === d.id || x.packingListDocumentId === d.id);
+    if (o?.projectId && db.projects.some((p) => p.id === o.projectId)) return o.projectId;
+    const s = db.shipments.find((x) => x.documentId === d.id);
+    if (s?.projectId) return s.projectId;
+    const viaLink = d.linkedTo.find((l) => l.type === 'project')?.id;
+    if (viaLink && db.projects.some((p) => p.id === viaLink)) return viaLink;
+    const viaTree = db.projects.find((p) => p.docLinks.some((l) => l.documentId === d.id));
+    return viaTree?.id ?? null;
+  };
   const docs = db.documents
+    .filter((d) => !(d.extracted as { photo?: boolean } | null)?.photo) // les photos de marchandises vivent sur leur fiche
     .filter((d) => filter === 'tous' || (filter === 'a_traiter' ? !d.extracted : !!d.extracted))
     .filter((d) => kindFilter === 'tous' || d.kind === kindFilter)
     .filter((d) => !q || `${d.fileName} ${d.summary}`.toLowerCase().includes(q.toLowerCase()));
@@ -163,6 +176,7 @@ export function DocumentsPage() {
               {(Object.keys(KIND_LABELS) as DocumentKind[]).map((k) => <option key={k} value={k}>{KIND_LABELS[k]}{kindCounts[k] ? ` (${kindCounts[k]})` : ''}</option>)}
             </select>
             <input className="search" style={{ minWidth: 160, padding: '4px 8px' }} placeholder="Rechercher…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <label className="small row-flex" style={{ gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={byProject} onChange={(e) => setByProject(e.target.checked)} /> Par importation</label>
           </div>
 
           {sel.size > 0 && (
@@ -181,7 +195,17 @@ export function DocumentsPage() {
               <table className="tbl">
                 <thead><tr><th style={{ width: 28 }}><input type="checkbox" title="Tout cocher" checked={docs.length > 0 && docs.every((d) => sel.has(d.id))} onChange={() => setSel(docs.every((d) => sel.has(d.id)) ? new Set() : new Set(docs.map((d) => d.id)))} /></th><th>Fichier</th><th>Type</th><th>Résumé</th><th>Importé le</th></tr></thead>
                 <tbody>
-                  {docs.map((d) => (
+                  {(() => {
+                    // Regroupement par importation (les documents sans importation à la fin).
+                    const groups: { key: string; label: string; items: typeof docs }[] = [];
+                    if (byProject) {
+                      const withP = docs.map((d) => ({ d, pid: projectOf(d) }));
+                      for (const p of [...db.projects].sort((a, b) => (b.targetDate || b.createdAt).localeCompare(a.targetDate || a.createdAt))) { const items = withP.filter((x) => x.pid === p.id).map((x) => x.d); if (items.length) groups.push({ key: p.id, label: `📦 ${p.name}${p.container ? ` · ${p.container}` : ''}`, items }); }
+                      const rest = withP.filter((x) => !x.pid).map((x) => x.d); if (rest.length) groups.push({ key: '', label: 'Sans importation', items: rest });
+                    } else groups.push({ key: 'all', label: '', items: docs });
+                    return groups.flatMap((g) => [
+                      ...(g.label ? [<tr key={`g-${g.key}`} className="group-row"><td colSpan={5}><span className="row-flex" style={{ gap: 8 }}><b>{g.label}</b><span className="muted small">{g.items.length} document{g.items.length > 1 ? 's' : ''}</span>{g.key && g.key !== 'all' && <a className="small" style={{ cursor: 'pointer' }} onClick={() => go('projects', g.key)}>ouvrir l'importation</a>}</span></td></tr>] : []),
+                      ...g.items.map((d) => (
                     <tr key={d.id} className={`click${selectedId === d.id ? ' selected' : ''}`} onClick={() => setSelectedId(d.id)}>
                       <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(d.id)} onChange={() => toggleSel(d.id)} /></td>
                       <td className="strong" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.fileName}>{d.mimeType === 'application/pdf' ? '📄' : '🖼'} {d.fileName}</td>
@@ -189,7 +213,9 @@ export function DocumentsPage() {
                       <td className="small" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.summary}>{d.summary || <span className="muted">Pas encore analysé</span>}</td>
                       <td className="small muted" style={{ whiteSpace: 'nowrap' }}>{fmtDate(d.createdAt)}</td>
                     </tr>
-                  ))}
+                      )),
+                    ]);
+                  })()}
                 </tbody>
               </table>
             </div>

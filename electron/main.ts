@@ -56,6 +56,12 @@ app.whenReady().then(() => {
   ipcMain.handle('db:load', () => db);
   ipcMain.handle('db:save', (_e, next: Database) => { db = next; saveDb(db); cloud.scheduleSync(); });
   cloud.configure().catch(() => undefined);
+  // Taux de change : mise à jour automatique à chaque ouverture (sauf si désactivé dans Réglages).
+  if (db.settings.fxAuto !== false) fetchRates().then((r) => {
+    if (!r) return;
+    db = { ...db, settings: { ...db.settings, fxToEur: { ...db.settings.fxToEur, ...r.rates }, fxUpdatedAt: r.date } };
+    saveDb(db); send('db:remote', db); cloud.scheduleSync();
+  }).catch(() => undefined);
 
   ipcMain.handle('cloud:status', () => cloud.getStatus());
   ipcMain.handle('cloud:signUp', (_e, email: string, password: string, name: string) => cloud.signUp(email, password, name));
@@ -66,7 +72,10 @@ app.whenReady().then(() => {
   ipcMain.handle('cloud:selectOrg', (_e, orgId: string) => cloud.selectOrg(orgId));
   ipcMain.handle('cloud:leaveOrg', (_e, orgId: string) => cloud.leaveOrg(orgId));
   ipcMain.handle('cloud:regenerateCode', () => cloud.regenerateCode());
+  ipcMain.handle('cloud:updateAccount', (_e, patch) => cloud.updateAccount(patch));
+  ipcMain.handle('fx:fetch', () => fetchRates());
   ipcMain.handle('cloud:syncNow', async () => { await cloud.sync(); return cloud.getStatus(); });
+  ipcMain.handle('cloud:pushLocal', async () => { await cloud.pushLocal(); return cloud.getStatus(); });
 
   ipcMain.handle('files:import', async () => {
     const res = await dialog.showOpenDialog({
@@ -129,3 +138,15 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+/** Taux de change du jour (Banque centrale européenne via frankfurter.app) : EUR pour 1 unité de devise. */
+async function fetchRates(): Promise<{ rates: Partial<Record<'USD' | 'GBP' | 'CNY', number>>; date: string } | null> {
+  try {
+    const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,CNY');
+    if (!r.ok) return null;
+    const j = (await r.json()) as { date: string; rates: Record<string, number> };
+    const rates: Partial<Record<'USD' | 'GBP' | 'CNY', number>> = {};
+    for (const [k, v] of Object.entries(j.rates)) if (v > 0) rates[k as 'USD'] = Math.round((1 / v) * 10000) / 10000;
+    return { rates, date: j.date };
+  } catch { return null; }
+}
