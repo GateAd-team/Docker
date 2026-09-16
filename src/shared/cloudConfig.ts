@@ -1,5 +1,5 @@
 /**
- * Projet Supabase de Docker : intégré à l'application, identique pour tous les postes.
+ * Projet Supabase de Bao : intégré à l'application, identique pour tous les postes.
  * La clé « publishable » est publique par conception (les droits sont contrôlés par l'authentification et les règles RLS côté serveur).
  * Pour changer de projet : modifier ces deux valeurs, appliquer `supabase/schema.sql` sur le nouveau projet, redistribuer l'application.
  */

@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { api } from '../api';
 import { useCloud } from '../cloud';
 import { ConfirmButton, Field, Input, NumberInput } from '../components/ui';
-import type { CloudStatus, Currency, Market, Settings } from '../../shared/types';
+import type { CloudStatus, Currency, Market, Settings, UpdateStatus } from '../../shared/types';
 import { emptyDatabase } from '../../shared/types';
 import { seedDatabase } from '../seed';
 import { MARKET_LABELS } from '../labels';
@@ -27,7 +27,7 @@ export function SettingsPage() {
   const historyField = (
     <Field label="Historique lu à chaque synchronisation (jours)">
       <NumberInput value={s.gmail.historyDays || 730} onChange={(v) => setS({ ...s, gmail: { ...s.gmail, historyDays: Math.max(1, Math.round(v || 730)) } })} />
-      <div className="small muted" style={{ marginTop: 4 }}>Docker relit toute cette période à chaque synchro et ne garde que les emails qu'il n'a pas encore (ceux supprimés dans Docker ne reviennent pas).</div>
+      <div className="small muted" style={{ marginTop: 4 }}>Bao relit toute cette période à chaque synchro et ne garde que les emails qu'il n'a pas encore (ceux supprimés dans Bao ne reviennent pas).</div>
     </Field>
   );
   const labelField = (
@@ -38,7 +38,7 @@ export function SettingsPage() {
         <button className="btn small" onClick={loadLabels}>Charger mes libellés</button>
         {s.gmail.label && <button className="btn ghost small" onClick={() => setS({ ...s, gmail: { ...s.gmail, label: '' } })}>✕</button>}
       </div>
-      <div className="small muted" style={{ marginTop: 4 }}>Crée un libellé dans Gmail (ex. « Transporteurs »), range-y les échanges logistiques (un filtre Gmail peut le faire tout seul), et Docker lira <b>tout ce libellé</b> — sans chercher par expéditeur ni mot-clé. Vide = recherche par adresses des partenaires + mots-clés.</div>
+      <div className="small muted" style={{ marginTop: 4 }}>Crée un libellé dans Gmail (ex. « Transporteurs »), range-y les échanges logistiques (un filtre Gmail peut le faire tout seul), et Bao lira <b>tout ce libellé</b> — sans chercher par expéditeur ni mot-clé. Vide = recherche par adresses des partenaires + mots-clés.</div>
     </Field>
   );
   const connectGoogle = async () => {
@@ -111,11 +111,11 @@ export function SettingsPage() {
             <details className="small muted mt">
               <summary style={{ cursor: 'pointer' }}><b>Marche à suivre (une seule fois, ~5 minutes)</b> — obtenir un ID client et un secret</summary>
               <ol style={{ paddingLeft: 18, lineHeight: 1.6 }}>
-                <li>Va sur <b>console.cloud.google.com</b>, connecté avec ton compte Gmail. En haut, crée un projet (ex. « Docker »).</li>
+                <li>Va sur <b>console.cloud.google.com</b>, connecté avec ton compte Gmail. En haut, crée un projet (ex. « Bao »).</li>
                 <li>Menu ☰ → <b>API et services</b> → <b>Bibliothèque</b> → cherche « Gmail API » → <b>Activer</b>.</li>
-                <li><b>API et services → Écran de consentement OAuth</b> (ou « Branding / Audience ») : type <b>Externe</b>, nom « Docker », ton email comme contact → Enregistrer. Dans <b>Audience</b>, ajoute ton adresse Gmail comme <b>utilisateur test</b>.</li>
+                <li><b>API et services → Écran de consentement OAuth</b> (ou « Branding / Audience ») : type <b>Externe</b>, nom « Bao », ton email comme contact → Enregistrer. Dans <b>Audience</b>, ajoute ton adresse Gmail comme <b>utilisateur test</b>.</li>
                 <li><b>API et services → Identifiants</b> → <b>Créer des identifiants</b> → <b>ID client OAuth</b> → type d'application <b>Application de bureau</b> → Créer. Copie l'<b>ID client</b> et le <b>Secret client</b> ici.</li>
-                <li>Clique <b>Connecter mon compte Google</b> : une page Google s'ouvre (l'avertissement « application non validée » est normal : Continuer), choisis le compte, coche la lecture de Gmail, valide. Docker ne demande que la <b>lecture</b> — il ne peut ni envoyer ni supprimer.</li>
+                <li>Clique <b>Connecter mon compte Google</b> : une page Google s'ouvre (l'avertissement « application non validée » est normal : Continuer), choisis le compte, coche la lecture de Gmail, valide. Bao ne demande que la <b>lecture</b> — il ne peut ni envoyer ni supprimer.</li>
               </ol>
               Le jeton reste sur cet ordinateur ; tu peux retirer l'accès à tout moment sur myaccount.google.com/permissions.
             </details>
@@ -134,7 +134,7 @@ export function SettingsPage() {
             <div className="small muted mt">Nécessite la validation en deux étapes sur le compte Google, puis un mot de passe d'application créé sur myaccount.google.com/apppasswords (16 caractères). Si ton compte ne le permet pas, utilise « Connexion Google » ci-dessus.</div>
           </>
         )}
-        <div className="small muted mt">Dans tous les cas, Docker lit ta boîte en <b>lecture seule</b> et ne récupère que les échanges avec tes transporteurs et agents (adresses de Logistique) ou dont l'objet contient un mot-clé. Sans aucune connexion, tu peux aussi glisser des fichiers .eml dans Logistique → Emails.</div>
+        <div className="small muted mt">Dans tous les cas, Bao lit ta boîte en <b>lecture seule</b> et ne récupère que les échanges avec tes transporteurs et agents (adresses de Logistique) ou dont l'objet contient un mot-clé. Sans aucune connexion, tu peux aussi glisser des fichiers .eml dans Logistique → Emails.</div>
       </div>
 
       <div className="card">
@@ -143,7 +143,7 @@ export function SettingsPage() {
           {(['USD', 'GBP', 'CNY'] as Currency[]).map((c) => <Field key={c} label={`1 ${c} =`}><NumberInput value={s.fxToEur[c]} onChange={(v) => setS({ ...s, fxToEur: { ...s.fxToEur, [c]: v } })} unit="EUR" /></Field>)}
         </div>
         <div className="row-flex small mt" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <label className="row-flex" style={{ gap: 6 }}><input type="checkbox" checked={s.fxAuto !== false} onChange={(e) => { const next = { ...s, fxAuto: e.target.checked }; setS(next); update((d) => ({ ...d, settings: { ...d.settings, fxAuto: e.target.checked } })); }} /> Mettre à jour automatiquement à chaque ouverture de Docker (taux de la Banque centrale européenne)</label>
+          <label className="row-flex" style={{ gap: 6 }}><input type="checkbox" checked={s.fxAuto !== false} onChange={(e) => { const next = { ...s, fxAuto: e.target.checked }; setS(next); update((d) => ({ ...d, settings: { ...d.settings, fxAuto: e.target.checked } })); }} /> Mettre à jour automatiquement à chaque ouverture de Bao (taux de la Banque centrale européenne)</label>
           <span className="muted">{db.settings.fxUpdatedAt ? `Derniers taux du ${new Date(db.settings.fxUpdatedAt).toLocaleDateString('fr-FR')}` : 'Pas encore mis à jour automatiquement'}</span>
           <button className="btn small" onClick={async () => { const r = await api.fetchRates(); if (!r) { toast('Impossible de récupérer les taux (hors ligne ?)', true); return; } const fx = { ...s.fxToEur, ...r.rates } as Settings['fxToEur']; setS({ ...s, fxToEur: fx, fxUpdatedAt: r.date }); update((d) => ({ ...d, settings: { ...d.settings, fxToEur: { ...d.settings.fxToEur, ...r.rates }, fxUpdatedAt: r.date } })); toast(`Taux du ${new Date(r.date).toLocaleDateString('fr-FR')} appliqués`); }}>↻ Actualiser maintenant</button>
         </div>
@@ -168,6 +168,8 @@ export function SettingsPage() {
         </div>
         <div className="small muted mt">{db.projects.length} projets · {db.products.length} produits · {db.factories.length} usines · {db.orders.length} commandes · {db.shipments.length} expéditions · {db.documents.length} documents</div>
       </div>
+
+      <UpdateCard />
     </div>
   );
 }
@@ -243,7 +245,7 @@ function CloudCard() {
                 <div>
                   <div className="small muted">Inviter quelqu'un dans cet espace</div>
                   <div className="row-flex" style={{ gap: 8, alignItems: 'center' }}><code style={{ fontSize: 18, letterSpacing: 2, padding: '4px 10px', background: 'var(--accent-soft)', borderRadius: 8 }}>{active.inviteCode}</code><button className="btn small" onClick={() => { navigator.clipboard.writeText(active.inviteCode).then(() => toast('Code copié')); }}>Copier</button>{isOwner && <button className="btn ghost small" disabled={busy} onClick={() => act(() => api.cloudRegenerateCode(), 'Nouveau code généré')} title="Invalide l'ancien code">Régénérer</button>}</div>
-                  <div className="small muted mt">Il installe Docker, crée son compte, puis « Rejoindre l'espace d'un collègue » avec ce code.</div>
+                  <div className="small muted mt">Il installe Bao, crée son compte, puis « Rejoindre l'espace d'un collègue » avec ce code.</div>
                 </div>
                 <div>
                   <div className="small muted">Membres ({st.members.length})</div>
@@ -256,9 +258,45 @@ function CloudCard() {
             <Field label="Rejoindre un autre espace"><div className="row-flex"><Input value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="Code d'invitation" /><button className="btn small" disabled={busy || code.trim().length < 4} onClick={() => act(() => api.cloudJoinOrg(code), 'Espace rejoint')}>Rejoindre</button></div></Field>
             <Field label="Créer un autre espace"><div className="row-flex"><Input value={orgName} onChange={setOrgName} placeholder="Nom" /><button className="btn small" disabled={busy || !orgName.trim()} onClick={() => act(() => api.cloudCreateOrg(orgName), 'Espace créé')}>Créer</button></div></Field>
           </div>
-          <div className="small muted mt">Ce qui est partagé dans un espace : importations, marchandises, usines, commandes, expéditions, transporteurs, documents (PDF), emails récupérés, prix, réglages communs (taux de change, clé Claude). Propre à chaque poste : la connexion Gmail. Docker garde une copie locale et fusionne fiche par fiche : plusieurs personnes peuvent travailler en même temps, et l'application fonctionne hors ligne.</div>
+          <div className="small muted mt">Ce qui est partagé dans un espace : importations, marchandises, usines, commandes, expéditions, transporteurs, documents (PDF), emails récupérés, prix, réglages communs (taux de change, clé Claude). Propre à chaque poste : la connexion Gmail. Bao garde une copie locale et fusionne fiche par fiche : plusieurs personnes peuvent travailler en même temps, et l'application fonctionne hors ligne.</div>
         </>
       )}
+    </div>
+  );
+}
+
+
+/** Mise à jour de l'application depuis les Releases GitHub : Windows installe tout seul, Mac ouvre le .dmg à télécharger. */
+function UpdateCard() {
+  const { toast } = useStore();
+  const [u, setU] = useState<UpdateStatus | null>(null);
+  useEffect(() => { api.updateStatus().then(setU).catch(() => undefined); return api.onUpdateStatus(setU); }, []);
+  const busy = u?.state === 'checking' || u?.state === 'downloading';
+  const check = async () => { try { setU(await api.updateCheck()); } catch (e) { toast((e as Error).message, true); } };
+  const download = async () => { try { setU(await api.updateDownload()); } catch (e) { toast((e as Error).message, true); } };
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div><h2>Mise à jour de Bao</h2><div className="small muted">Version installée : <b>{u?.current ?? '…'}</b>{u?.latest && u.state !== 'uptodate' ? <> · dernière version publiée : <b>{u.latest}</b></> : null}</div></div>
+        <button className="btn" disabled={busy} onClick={check}>{u?.state === 'checking' ? <><span className="spinner" /> Vérification…</> : '↻ Vérifier les mises à jour'}</button>
+      </div>
+      {u?.state === 'uptodate' && <div className="small mt">✅ Bao est à jour{u.error ? <span className="muted"> — {u.error}</span> : null}.</div>}
+      {u?.state === 'error' && <div className="small mt" style={{ color: 'var(--bad)' }}>{u.error}</div>}
+      {u?.state === 'idle' && u.error && <div className="small muted mt">{u.error}</div>}
+      {(u?.state === 'available' || u?.state === 'opened') && (
+        <div className="mt">
+          <div className="row-flex" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <b>Nouvelle version {u.latest} disponible.</b>
+            {u.platform === 'windows'
+              ? <button className="btn primary small" onClick={download}>⇣ Télécharger et installer</button>
+              : <button className="btn primary small" onClick={download}>⇣ Télécharger le .dmg</button>}
+          </div>
+          {u.platform !== 'windows' && <div className="small muted mt">Sur Mac : ouvre le fichier téléchargé, glisse Bao dans Applications (remplacer l'ancienne), puis clic droit → Ouvrir la première fois (tant que l'app n'est pas signée).</div>}
+          {u.notes && <div className="small muted mt" style={{ whiteSpace: 'pre-wrap' }}>{u.notes}</div>}
+        </div>
+      )}
+      {u?.state === 'downloading' && <div className="small mt"><span className="spinner" /> Téléchargement… {u.progress} %</div>}
+      {u?.state === 'ready' && <div className="row-flex mt" style={{ gap: 8 }}><b>Mise à jour {u.latest} téléchargée.</b><button className="btn primary small" onClick={() => api.updateInstall()}>Redémarrer et installer</button><span className="small muted">Sinon elle s'installera à la prochaine fermeture de Bao.</span></div>}
     </div>
   );
 }

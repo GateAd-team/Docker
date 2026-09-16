@@ -86,7 +86,7 @@ function Workspace() {
       <ViewerProvider>
       <div className="app">
         <aside className="sidebar">
-          <div className="brand"><img className="logo" src={logoUrl} alt="" /><div>Docker<small>Import Chine · BudinBox</small></div></div>
+          <div className="brand"><img className="logo" src={logoUrl} alt="" /><div>Bao<small>Import Chine · BudinBox</small></div></div>
           <nav>
             {PAGES.map((p) => (
               <button key={p.page} className={nav.page === p.page ? 'active' : ''} onClick={() => go(p.page)}>

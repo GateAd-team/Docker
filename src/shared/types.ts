@@ -1,5 +1,5 @@
 /**
- * Modèle de données de Docker.
+ * Modèle de données de Bao.
  * Partagé entre le process principal Electron (stockage, IA) et l'interface React.
  * Tout est volontairement plat (tableaux d'objets reliés par id) pour être facile à
  * migrer vers SQLite ou vers le store de BudinBox.
@@ -319,13 +319,13 @@ export interface Settings {
     /** 'oauth' = connexion Google (recommandé), 'imap' = mot de passe d'application. */
     mode: 'oauth' | 'imap';
     email: string; appPassword: string; keywords: string; lastSync: string;
-    /** Libellé Gmail (dossier) à lire : si renseigné, Docker lit tous les emails de ce libellé, sans filtrer par expéditeur ni mot-clé. */
+    /** Libellé Gmail (dossier) à lire : si renseigné, Bao lit tous les emails de ce libellé, sans filtrer par expéditeur ni mot-clé. */
     label: string;
     /** Connexion Google (API Gmail) : identifiants OAuth « application de bureau » créés sur console.cloud.google.com, et jeton obtenu. */
     clientId: string; clientSecret: string; refreshToken: string;
     /** Profondeur d'historique lue à chaque synchronisation (jours). Les emails déjà récupérés sont ignorés grâce à leur identifiant. */
     historyDays: number;
-    /** Emails supprimés dans Docker : on ne les re-télécharge pas. */
+    /** Emails supprimés dans Bao : on ne les re-télécharge pas. */
     skipIds: string[];
   };
   /** Espace partagé actif (Supabase, voir `cloudConfig.ts`) : propre au poste, jamais envoyé sur le serveur. */
@@ -448,8 +448,20 @@ export function normalizeDatabase(raw: Partial<Database>): Database {
 /** Résultat de l'analyse IA d'un lot d'emails transporteurs. */
 export interface MailAnalysis {
   partners: { existingId: string | null; name: string; type: 'transporteur' | 'agent'; email: string; phone: string; wechat: string; city: string; services: string; contactName: string; contactRole: string; summary: string; actions: { text: string; dueDate: string; mailId: string }[]; mailIds: string[] }[];
-  shipments: { existingId: string | null; partnerName: string; reference: string; containerNo: string; trackingRef: string; mode: 'mer' | 'air' | 'rail' | 'express'; incoterm: 'EXW' | 'FOB' | 'CIF' | 'DDP'; origin: string; destination: string; etd: string; eta: string; status: 'planifiee' | 'collectee' | 'en_transit' | 'dedouanement' | 'livree'; cbm: number | null; weightKg: number | null; freightCost: number | null; insuranceCost: number | null; originFees: number | null; destinationFees: number | null; currency: 'USD' | 'EUR' | 'GBP' | 'CNY'; notes: string; mailIds: string[] }[];
+  shipments: { existingId: string | null; partnerName: string; reference: string; containerNo: string; trackingRef: string; mode: 'mer' | 'air' | 'rail' | 'express'; incoterm: 'EXW' | 'FOB' | 'CIF' | 'DDP'; origin: string; destination: string; etd: string; eta: string; status: 'planifiee' | 'collectee' | 'en_transit' | 'dedouanement' | 'livree'; cbm: number | null; weightKg: number | null; freightCost: number | null; insuranceCost: number | null; originFees: number | null; destinationFees: number | null; currency: 'USD' | 'EUR' | 'GBP' | 'CNY'; notes: string; mailIds: string[]; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: 'USD' | 'EUR' | 'GBP' | 'CNY' }[];
   overview: string;
+}
+
+/** Mise à jour de l'application (Releases GitHub). */
+export interface UpdateStatus {
+  current: string;
+  latest: string | null;
+  state: 'idle' | 'checking' | 'uptodate' | 'available' | 'downloading' | 'ready' | 'opened' | 'error';
+  url: string | null;
+  notes: string;
+  progress: number;
+  error: string;
+  platform: 'windows' | 'mac' | 'linux';
 }
 
 /** Résultat de la lecture IA d'un document importé. */
@@ -480,7 +492,7 @@ export interface DockerApi {
   /** Liste des libellés (dossiers) de la boîte, pour en choisir un dans Réglages. */
   mailLabels(): Promise<string[]>;
   mailAttachment(mailId: string, index: number): Promise<DocumentRecord | null>;
-  /** Import de fichiers .eml (message téléchargé depuis Gmail) déposés dans Docker. */
+  /** Import de fichiers .eml (message téléchargé depuis Gmail) déposés dans Bao. */
   mailImportEml(files: { name: string; base64: string }[]): Promise<MailMessage[]>;
   /** Analyse IA d'un lot d'emails : transporteurs, contacts, expéditions, bilan, choses à faire. */
   mailAnalyze(mailIds: string[]): Promise<MailAnalysis>;
@@ -498,6 +510,12 @@ export interface DockerApi {
   cloudUpdateAccount(patch: { name?: string; email?: string; password?: string; currentPassword?: string }): Promise<CloudStatus>;
   /** Taux de change du jour (EUR pour 1 unité) depuis un service public ; null si hors ligne. */
   fetchRates(): Promise<{ rates: Partial<Record<Currency, number>>; date: string } | null>;
+  /** Mises à jour : vérification, téléchargement (Windows) / ouverture du lien (Mac), installation. */
+  updateStatus(): Promise<UpdateStatus>;
+  updateCheck(): Promise<UpdateStatus>;
+  updateDownload(): Promise<UpdateStatus>;
+  updateInstall(): Promise<void>;
+  onUpdateStatus(cb: (s: UpdateStatus) => void): () => void;
   cloudSyncNow(): Promise<CloudStatus>;
   /** Force l'envoi de toutes les données de ce poste vers l'espace (fusion complète, rien n'est écrasé côté serveur). */
   cloudPushLocal(): Promise<CloudStatus>;

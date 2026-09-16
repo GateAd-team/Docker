@@ -1,4 +1,4 @@
--- Docker · schéma Supabase pour le partage d'un espace de travail entre plusieurs utilisateurs.
+-- Bao · schéma Supabase pour le partage d'un espace de travail entre plusieurs utilisateurs.
 -- À coller dans Supabase → SQL Editor → Run (une seule fois). Idempotent.
 
 -- Profils (miroir minimal de auth.users pour afficher les membres)
@@ -35,7 +35,7 @@ create table if not exists public.org_members (
   primary key (org_id, user_id)
 );
 
--- Espace de travail : toute la base Docker d'une organisation, en JSON, avec un numéro de version
+-- Espace de travail : toute la base Bao d'une organisation, en JSON, avec un numéro de version
 -- (verrouillage optimiste : on n'écrase jamais une version qu'on n'a pas vue).
 create table if not exists public.workspaces (
   org_id uuid primary key references public.organizations(id) on delete cascade,

@@ -7,7 +7,7 @@ import { KIND_LABELS } from '../../shared/extraction';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-/** Visionneur intégré : PDF rendus page par page (pdf.js) et photos, sans quitter Docker. */
+/** Visionneur intégré : PDF rendus page par page (pdf.js) et photos, sans quitter Bao. */
 const ViewerCtx = createContext<{ open: (documentId: string) => void }>({ open: () => {} });
 export const useViewer = () => useContext(ViewerCtx);
 

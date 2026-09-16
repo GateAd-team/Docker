@@ -3,7 +3,7 @@
  * Si elle est absente (ouverture dans un simple navigateur via `npm run dev:web`),
  * on bascule en mode démo : données d'exemple en mémoire / localStorage, lecture IA simulée.
  */
-import { normalizeDatabase, type CloudStatus, type Database, type DockerApi, type DocumentRecord, type ExtractionResult } from '../shared/types';
+import { normalizeDatabase, type CloudStatus, type Database, type DockerApi, type DocumentRecord, type ExtractionResult, type UpdateStatus } from '../shared/types';
 import { seedDatabase } from './seed';
 
 declare global {
@@ -57,6 +57,7 @@ function demoExtraction(doc: DocumentRecord): ExtractionResult {
   };
 }
 
+const demoUpdate: UpdateStatus = { current: '0.1.0', latest: null, state: 'idle', url: null, notes: '', progress: 0, error: '', platform: 'windows' };
 const demoCloud: CloudStatus = { ready: true, configured: false, user: new URLSearchParams(window.location.search).get('screen') === 'workspace' ? { id: 'demo', email: 'theo@wallup.fr', name: 'Théo' } : null, orgs: [], activeOrgId: '', members: [], version: 0, lastSync: '', syncing: false, error: '', remoteCounts: {}, filesUploaded: 0, filesLocal: 0 };
 
 const demoApi: DockerApi = {
@@ -105,8 +106,8 @@ const demoApi: DockerApi = {
     return demoExtraction(doc);
   },
   async testApiKey() { return { ok: false, message: 'Mode démo : la lecture IA est simulée, aucune clé nécessaire.' }; },
-  async mailTest() { return { ok: false, message: 'Mode démo : la connexion Gmail n\'est disponible que dans l\'application Docker.' }; },
-  async mailConnectGoogle() { return { ok: false, message: 'Mode démo : la connexion Google n\'est disponible que dans l\'application Docker.' }; },
+  async mailTest() { return { ok: false, message: 'Mode démo : la connexion Gmail n\'est disponible que dans l\'application Bao.' }; },
+  async mailConnectGoogle() { return { ok: false, message: 'Mode démo : la connexion Google n\'est disponible que dans l\'application Bao.' }; },
   async mailImportEml() { return []; },
   async mailLabels() { return ['Transporteurs', 'Usines', 'Douane']; },
   async mailAnalyze(mailIds) {
@@ -142,6 +143,11 @@ const demoApi: DockerApi = {
   async cloudRegenerateCode() { return demoCloud; },
   async cloudUpdateAccount() { return demoCloud; },
   async fetchRates() { try { const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,CNY'); const j = await r.json() as { date: string; rates: Record<string, number> }; return { date: j.date, rates: Object.fromEntries(Object.entries(j.rates).map(([k, v]) => [k, Math.round((1 / v) * 10000) / 10000])) }; } catch { return null; } },
+  async updateStatus() { return demoUpdate; },
+  async updateCheck() { return { ...demoUpdate, state: 'available' as const, latest: '0.2.0', notes: 'Mode démo : exemple de nouvelle version.' }; },
+  async updateDownload() { return { ...demoUpdate, state: 'ready' as const, latest: '0.2.0', progress: 100 }; },
+  async updateInstall() { /* démo */ },
+  onUpdateStatus() { return () => undefined; },
   async cloudSyncNow() { return demoCloud; },
   async cloudPushLocal() { return demoCloud; },
   onRemoteDb() { return () => undefined; },

@@ -6,7 +6,7 @@ export function AuthShell({ children, footer, wide }: { children: React.ReactNod
   return (
     <div className="auth">
       <aside className="auth-side">
-        <div className="auth-brand"><img className="logo" src={logoUrl} alt="" /><div>Docker<small>Import Chine · BudinBox</small></div></div>
+        <div className="auth-brand"><img className="logo" src={logoUrl} alt="" /><div>Bao<small>Import Chine · BudinBox</small></div></div>
         <div className="auth-pitch">
           <h1>Tes importations, du plan technique à la marge.</h1>
           <ul>

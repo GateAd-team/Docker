@@ -1,6 +1,6 @@
 /**
  * Ce que l'IA doit extraire de chaque type de document, et comment le transformer
- * en fiches Docker. Partagé entre le process principal (prompt) et l'interface (proposition
+ * en fiches Bao. Partagé entre le process principal (prompt) et l'interface (proposition
  * d'enregistrement).
  */
 import type { DocumentKind } from './types';
@@ -111,7 +111,7 @@ export interface ContactData {
   companyType: 'usine' | 'transporteur' | 'agent' | 'autre';
 }
 
-export const EXTRACTION_INSTRUCTIONS = `Tu es l'assistant de lecture de documents de "Docker", un logiciel de gestion d'importations depuis la Chine.
+export const EXTRACTION_INSTRUCTIONS = `Tu es l'assistant de lecture de documents de "Bao", un logiciel de gestion d'importations depuis la Chine.
 On te donne un document (PDF, photo ou capture d'écran). Détermine son type parmi :
 - facture : facture commerciale définitive d'une usine
 - proforma : proforma invoice (PI) / devis d'une usine, avant commande

@@ -1,8 +1,8 @@
 {
   "name": "docker-import-manager",
-  "productName": "Docker",
-  "version": "0.1.0",
-  "description": "Docker — gestion des projets d'importation depuis la Chine (module BudinBox)",
+  "productName": "Bao",
+  "version": "0.2.0",
+  "description": "Bao — gestion des projets d'importation depuis la Chine (module BudinBox)",
   "main": "dist-electron/electron/main.js",
   "private": true,
   "scripts": {
@@ -18,9 +18,9 @@
     "dist:mac": "npm run build && electron-builder --mac --publish never"
   },
   "build": {
-    "appId": "com.budinbox.docker",
-    "productName": "Docker",
-    "artifactName": "Docker-${version}-${os}-${arch}.${ext}",
+    "appId": "com.budinbox.bao",
+    "productName": "Bao",
+    "artifactName": "Bao-${version}-${os}-${arch}.${ext}",
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -49,7 +49,7 @@
       ],
       "icon": "build/icon.icns",
       "category": "public.app-category.business",
-      "artifactName": "Docker-${version}-mac-${arch}.${ext}"
+      "artifactName": "Bao-${version}-mac-${arch}.${ext}"
     },
     "dmg": {
       "contents": [
@@ -75,13 +75,13 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Docker-${version}-windows-setup.${ext}"
+      "artifactName": "Bao-${version}-windows-setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Docker",
+      "shortcutName": "Bao",
       "language": "1036"
     },
     "linux": {
@@ -90,11 +90,16 @@
       ],
       "icon": "build/icon.png"
     },
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "GateAd-team",
+      "repo": "Docker"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "@supabase/supabase-js": "^2.116.0",
+    "electron-updater": "^6.8.9",
     "imapflow": "^2.0.0",
     "mailparser": "^3.9.23",
     "pdfjs-dist": "^4.10.38",

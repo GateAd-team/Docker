@@ -33,7 +33,7 @@ function toMessage(mailbox: string, uid: number | string, parsed: ParsedMail): M
   };
 }
 
-/** Import de fichiers .eml déposés dans Docker (Gmail : ⋮ → « Télécharger le message »). */
+/** Import de fichiers .eml déposés dans Bao (Gmail : ⋮ → « Télécharger le message »). */
 export async function importEml(files: { name: string; base64: string }[]): Promise<MailMessage[]> {
   const out: MailMessage[] = [];
   for (const f of files) {
@@ -62,7 +62,7 @@ export async function connectGoogle(clientId: string, clientSecret: string): Pro
       if (url.pathname !== '/') { res.writeHead(404); res.end(); return; }
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error');
-      const page = (title: string, body: string) => `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;max-width:520px"><h2>${title}</h2><p>${body}</p><p style="color:#888">Tu peux fermer cet onglet et revenir dans Docker.</p></body>`;
+      const page = (title: string, body: string) => `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;max-width:520px"><h2>${title}</h2><p>${body}</p><p style="color:#888">Tu peux fermer cet onglet et revenir dans Bao.</p></body>`;
       if (error || !code) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page('Connexion refusée', error ?? 'Aucun code reçu.')); finish({ ok: false, message: `Google a refusé la connexion : ${error ?? 'aucun code'}` }); return; }
       try {
         const address = server.address();
@@ -71,8 +71,8 @@ export async function connectGoogle(clientId: string, clientSecret: string): Pro
         const tok = (await tokenRes.json()) as { access_token?: string; refresh_token?: string; error?: string; error_description?: string };
         if (!tok.access_token) throw new Error(tok.error_description ?? tok.error ?? 'pas de jeton');
         const prof = (await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { Authorization: `Bearer ${tok.access_token}` } })).json()) as { emailAddress?: string };
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page('Docker est connecté ✅', `Compte : ${prof.emailAddress ?? ''}`));
-        if (!tok.refresh_token) finish({ ok: false, message: 'Google n\'a pas renvoyé de jeton durable. Retire l\'accès de Docker sur myaccount.google.com/permissions puis recommence.' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page('Bao est connecté ✅', `Compte : ${prof.emailAddress ?? ''}`));
+        if (!tok.refresh_token) finish({ ok: false, message: 'Google n\'a pas renvoyé de jeton durable. Retire l\'accès de Bao sur myaccount.google.com/permissions puis recommence.' });
         else finish({ ok: true, message: `Connecté à ${prof.emailAddress ?? 'Gmail'}.`, refreshToken: tok.refresh_token, email: prof.emailAddress });
       } catch (e) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page('Erreur', (e as Error).message));
@@ -110,7 +110,7 @@ async function gapi<T>(token: string, path: string, params?: Record<string, stri
     const body = (await r.text()).slice(0, 300);
     const quota = r.status === 429 || (r.status === 403 && /quota|rate/i.test(body));
     if (quota && attempt < waits.length) { await sleep(waits[attempt]); continue; }
-    if (quota) throw new Error('Gmail limite le nombre de requêtes par minute et Docker a attendu trop longtemps. Relance la synchronisation dans une minute : elle reprendra là où elle s\'est arrêtée (les emails déjà récupérés sont conservés).');
+    if (quota) throw new Error('Gmail limite le nombre de requêtes par minute et Bao a attendu trop longtemps. Relance la synchronisation dans une minute : elle reprendra là où elle s\'est arrêtée (les emails déjà récupérés sont conservés).');
     throw new Error(`API Gmail : ${r.status} ${body}`);
   }
 }

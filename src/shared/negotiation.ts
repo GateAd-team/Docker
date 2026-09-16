@@ -1,5 +1,5 @@
 /**
- * Négociation assistée : Docker prépare les demandes de prix et les contre-offres (anglais + chinois),
+ * Négociation assistée : Bao prépare les demandes de prix et les contre-offres (anglais + chinois),
  * calcule des prix cibles à partir de l'historique et de la concurrence, et lit les réponses ;
  * l'utilisateur garde l'envoi et la décision.
  */

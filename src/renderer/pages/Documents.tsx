@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { useNav } from '../App';
 import { DocumentPreview, useViewer } from '../components/Viewer';
 import { api, fileToPayload } from '../api';
-import { Badge, ConfirmButton, Empty, Field, Modal, Select, fmtDate } from '../components/ui';
+import { Badge, ConfirmButton, Empty, Field, Modal, Select, fmtDate, Th, useColumnWidths, useSort } from '../components/ui';
 import { KIND_LABELS } from '../../shared/extraction';
 import type { Database, DocumentKind, DocumentRecord, ExtractionResult } from '../../shared/types';
 import { applyProposal, buildProposal, defaultChoices, findMatchingOrders, findMatchingShipment, findProduct, mapLinesToOrder, type Choices, type Proposal } from '../applyExtraction';
@@ -134,6 +134,16 @@ export function DocumentsPage() {
     .filter((d) => filter === 'tous' || (filter === 'a_traiter' ? !d.extracted : !!d.extracted))
     .filter((d) => kindFilter === 'tous' || d.kind === kindFilter)
     .filter((d) => !q || `${d.fileName} ${d.summary}`.toLowerCase().includes(q.toLowerCase()));
+  const sorter = useSort('documents', { key: 'date', dir: 'desc' });
+  const cols = useColumnWidths('documents');
+  const sortDocs = (rows: typeof docs) => sorter.apply(rows, { name: (d) => d.fileName, kind: (d) => (d.extracted ? KIND_LABELS[d.kind] : 'zzz à traiter'), summary: (d) => d.summary, date: (d) => d.createdAt });
+  const [paneW, setPaneW] = useState<number>(() => { try { return Number(localStorage.getItem('docs:paneW')) || 0; } catch { return 0; } });
+  const startSplit = (e: React.MouseEvent) => {
+    e.preventDefault(); const startX = e.clientX; const startW = paneW || (document.querySelector('.doc-pane') as HTMLElement | null)?.getBoundingClientRect().width || 520;
+    const move = (ev: MouseEvent) => setPaneW(Math.min(window.innerWidth - 420, Math.max(320, startW - (ev.clientX - startX))));
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; document.body.style.userSelect = ''; setPaneW((w) => { try { localStorage.setItem('docs:paneW', String(w)); } catch { /* ignore */ } return w; }); };
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
   const selected = db.documents.find((d) => d.id === selectedId) ?? null;
   useEffect(() => { if (!selectedId && docs.length) setSelectedId(docs[0].id); }, [docs.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const kindCounts = db.documents.reduce<Record<string, number>>((acc, d) => { acc[d.kind] = (acc[d.kind] ?? 0) + 1; return acc; }, {});
@@ -155,7 +165,7 @@ export function DocumentsPage() {
   return (
     <div className="page" style={{ maxWidth: 'none' }}>
       <div className="page-head">
-        <div><h1>Documents</h1><div className="sub">Dépose factures, packing lists, plans, devis, captures d'écran : Docker les lit et remplit les fiches.</div></div>
+        <div><h1>Documents</h1><div className="sub">Dépose factures, packing lists, plans, devis, captures d'écran : Bao les lit et remplit les fiches.</div></div>
         <div className="actions">
           {db.documents.some((d) => !d.extracted) && <button className="btn" disabled={!!busy} onClick={analyseAll}>{busy ? <><span className="spinner" /> Lecture…</> : `⚡ Tout analyser (${db.documents.filter((d) => !d.extracted).length})`}</button>}
           <button className="btn primary" onClick={async () => addDocs(await api.importFiles())}>+ Importer des fichiers</button>
@@ -183,7 +193,7 @@ export function DocumentsPage() {
             <div className="card mb" style={{ padding: '10px 14px', background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}>
               <div className="row-flex" style={{ flexWrap: 'wrap', gap: 8 }}>
                 <b>{sel.size} document{sel.size > 1 ? 's' : ''} coché{sel.size > 1 ? 's' : ''}</b>
-                <span className="small muted">— Docker les lit un par un et propose la même importation pour tous (proformas, factures et packing lists de plusieurs usines qui partent dans le même conteneur).</span>
+                <span className="small muted">— Bao les lit un par un et propose la même importation pour tous (proformas, factures et packing lists de plusieurs usines qui partent dans le même conteneur).</span>
                 <span style={{ flex: 1 }} />
                 <button className="btn primary small" disabled={!!busy} onClick={() => setBatchSetup({ projectId: db.projects.filter((p) => p.status !== 'archive' && p.status !== 'vente')[0]?.id ?? 'new', newProjectName: '' })}>✦ Analyser ensemble comme une même importation</button>
                 <button className="btn ghost small" onClick={() => setSel(new Set())}>Tout décocher</button>
@@ -191,26 +201,26 @@ export function DocumentsPage() {
             </div>
           )}
           {docs.length === 0 ? <div className="card"><Empty icon="📄" title={db.documents.length ? 'Aucun document ne correspond aux filtres' : 'Aucun document'} text={db.documents.length ? '' : 'Commence par importer une facture ou un plan.'} /></div> : (
-            <div className="card pad0">
+            <div className="card pad0" style={{ overflowX: 'auto' }}>
               <table className="tbl">
-                <thead><tr><th style={{ width: 28 }}><input type="checkbox" title="Tout cocher" checked={docs.length > 0 && docs.every((d) => sel.has(d.id))} onChange={() => setSel(docs.every((d) => sel.has(d.id)) ? new Set() : new Set(docs.map((d) => d.id)))} /></th><th>Fichier</th><th>Type</th><th>Résumé</th><th>Importé le</th></tr></thead>
+                <thead><tr><th style={{ width: 28 }}><input type="checkbox" title="Tout cocher" checked={docs.length > 0 && docs.every((d) => sel.has(d.id))} onChange={() => setSel(docs.every((d) => sel.has(d.id)) ? new Set() : new Set(docs.map((d) => d.id)))} /></th><Th label="Fichier" sortKey="name" sort={sorter.sort} onSort={sorter.toggle} colKey="name" widths={cols.widths} onResize={cols.setWidth} /><Th label="Type" sortKey="kind" sort={sorter.sort} onSort={sorter.toggle} colKey="kind" widths={cols.widths} onResize={cols.setWidth} /><Th label="Résumé" sortKey="summary" sort={sorter.sort} onSort={sorter.toggle} colKey="summary" widths={cols.widths} onResize={cols.setWidth} /><Th label="Importé le" sortKey="date" sort={sorter.sort} onSort={sorter.toggle} defaultDir="desc" colKey="date" widths={cols.widths} onResize={cols.setWidth} /></tr></thead>
                 <tbody>
                   {(() => {
                     // Regroupement par importation (les documents sans importation à la fin).
                     const groups: { key: string; label: string; items: typeof docs }[] = [];
                     if (byProject) {
                       const withP = docs.map((d) => ({ d, pid: projectOf(d) }));
-                      for (const p of [...db.projects].sort((a, b) => (b.targetDate || b.createdAt).localeCompare(a.targetDate || a.createdAt))) { const items = withP.filter((x) => x.pid === p.id).map((x) => x.d); if (items.length) groups.push({ key: p.id, label: `📦 ${p.name}${p.container ? ` · ${p.container}` : ''}`, items }); }
-                      const rest = withP.filter((x) => !x.pid).map((x) => x.d); if (rest.length) groups.push({ key: '', label: 'Sans importation', items: rest });
-                    } else groups.push({ key: 'all', label: '', items: docs });
+                      for (const p of [...db.projects].sort((a, b) => (b.targetDate || b.createdAt).localeCompare(a.targetDate || a.createdAt))) { const items = withP.filter((x) => x.pid === p.id).map((x) => x.d); if (items.length) groups.push({ key: p.id, label: `📦 ${p.name}${p.container ? ` · ${p.container}` : ''}`, items: sortDocs(items) }); }
+                      const rest = withP.filter((x) => !x.pid).map((x) => x.d); if (rest.length) groups.push({ key: '', label: 'Sans importation', items: sortDocs(rest) });
+                    } else groups.push({ key: 'all', label: '', items: sortDocs(docs) });
                     return groups.flatMap((g) => [
                       ...(g.label ? [<tr key={`g-${g.key}`} className="group-row"><td colSpan={5}><span className="row-flex" style={{ gap: 8 }}><b>{g.label}</b><span className="muted small">{g.items.length} document{g.items.length > 1 ? 's' : ''}</span>{g.key && g.key !== 'all' && <a className="small" style={{ cursor: 'pointer' }} onClick={() => go('projects', g.key)}>ouvrir l'importation</a>}</span></td></tr>] : []),
                       ...g.items.map((d) => (
                     <tr key={d.id} className={`click${selectedId === d.id ? ' selected' : ''}`} onClick={() => setSelectedId(d.id)}>
                       <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(d.id)} onChange={() => toggleSel(d.id)} /></td>
-                      <td className="strong" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.fileName}>{d.mimeType === 'application/pdf' ? '📄' : '🖼'} {d.fileName}</td>
+                      <td className="strong cell-clip" style={cols.widths.name ? undefined : { maxWidth: 220 }} title={d.fileName}>{d.mimeType === 'application/pdf' ? '📄' : '🖼'} {d.fileName}</td>
                       <td>{d.extracted ? <Badge tone="blue">{KIND_LABELS[d.kind]}</Badge> : <Badge tone="amber">À traiter</Badge>}</td>
-                      <td className="small" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.summary}>{d.summary || <span className="muted">Pas encore analysé</span>}</td>
+                      <td className="small cell-clip" style={cols.widths.summary ? undefined : { maxWidth: 300 }} title={d.summary}>{d.summary || <span className="muted">Pas encore analysé</span>}</td>
                       <td className="small muted" style={{ whiteSpace: 'nowrap' }}>{fmtDate(d.createdAt)}</td>
                     </tr>
                       )),
@@ -222,7 +232,8 @@ export function DocumentsPage() {
           )}
         </div>
 
-        <aside className="doc-pane">
+        <div className="pane-splitter" onMouseDown={startSplit} title="Glisser pour agrandir l'aperçu" />
+        <aside className="doc-pane" style={paneW ? { width: paneW } : undefined}>
           {!selected ? <div className="empty"><div className="big">👁</div>Clique sur un document pour l'afficher ici.</div> : (
             <>
               <div className="doc-pane-head">
@@ -255,7 +266,7 @@ export function DocumentsPage() {
 
       {batchSetup && (
         <Modal title="Analyser ces documents comme une même importation" onClose={() => setBatchSetup(null)} footer={<><button className="btn" onClick={() => setBatchSetup(null)}>Annuler</button><button className="btn primary" disabled={batchSetup.projectId === 'new' && !batchSetup.newProjectName.trim()} onClick={() => analyseSelection(batchSetup)}>Lancer la lecture ({sel.size})</button></>}>
-          <p className="small muted" style={{ marginTop: 0 }}>Choisis l'importation (le conteneur) à laquelle rattacher tout ce que Docker va lire dans ces {sel.size} documents. Tu valides ensuite chaque document, avec l'importation déjà pré-remplie.</p>
+          <p className="small muted" style={{ marginTop: 0 }}>Choisis l'importation (le conteneur) à laquelle rattacher tout ce que Bao va lire dans ces {sel.size} documents. Tu valides ensuite chaque document, avec l'importation déjà pré-remplie.</p>
           <div className="form c2">
             <Field label="Importation" span={2}><Select value={batchSetup.projectId} onChange={(v) => setBatchSetup({ ...batchSetup, projectId: v })} options={[...db.projects.filter((p) => p.status !== 'archive').map((p) => ({ value: p.id, label: `${p.name}${p.container ? ` · ${p.container}` : ''}` })), { value: 'new', label: '➕ Nouvelle importation…' }]} /></Field>
             {batchSetup.projectId === 'new' && <Field label="Nom de la nouvelle importation" span={2}><input autoFocus className="search" style={{ width: '100%' }} placeholder="ex. Conteneur 40HQ — décembre 2026" value={batchSetup.newProjectName} onChange={(e) => setBatchSetup({ ...batchSetup, newProjectName: e.target.value })} /></Field>}
@@ -271,7 +282,7 @@ export function DocumentsPage() {
           <button className="btn" onClick={() => { const d = already; setAlready(null); analyse(d, { reuse: true }); }}>Revalider sans relire</button>
           <button className="btn primary" onClick={() => { setAlready(null); if (queue.length) nextInQueue(); else { setBatch(null); toast('Terminé'); } }}>Passer au suivant →</button>
         </>}>
-          <p style={{ marginTop: 0 }}><b>{already.fileName}</b> a déjà été lu par Docker{already.extracted ? ` (${KIND_LABELS[already.kind]})` : ''}.</p>
+          <p style={{ marginTop: 0 }}><b>{already.fileName}</b> a déjà été lu par Bao{already.extracted ? ` (${KIND_LABELS[already.kind]})` : ''}.</p>
           {already.summary && <p className="small muted">{already.summary}</p>}
           {already.linkedTo.length > 0 && <div className="row-flex small" style={{ flexWrap: 'wrap' }}><span className="muted">Rattaché à :</span>{already.linkedTo.map((l, i) => <LinkChip key={i} type={l.type} id={l.id} />)}</div>}
           <p className="small muted mt">« Passer au suivant » garde tout tel quel. « Revalider sans relire » rouvre la fenêtre de validation avec la lecture précédente (utile pour le rattacher à l'importation du lot), sans consommer d'appel IA. « Relire avec l'IA » refait la lecture complète.</p>
@@ -401,7 +412,7 @@ export function ReviewModal({ doc, result, remaining = 0, batch = null, onClose,
             <div className="mt">
               <div className="small muted mb">Références détectées — l'IA a pré-rempli nom, description, code douanier et colisage. Pour chaque ligne : associe-la à une référence existante (ses champs vides seront complétés), ou crée-la en choisissant son nom interne, sa référence interne et son dossier :</div>
               <table className="tbl">
-                <thead><tr><th style={{ width: '55%' }}>Ligne du document</th><th className="num">Qté</th><th className="num">Prix</th><th>Référence Docker</th></tr></thead>
+                <thead><tr><th style={{ width: '55%' }}>Ligne du document</th><th className="num">Qté</th><th className="num">Prix</th><th>Référence Bao</th></tr></thead>
                 <tbody>{proposal.products.map((pp) => (
                   <tr key={pp.key}>
                     <td className="small">

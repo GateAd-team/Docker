@@ -77,7 +77,7 @@ export function ProjectsPage() {
         </div>
       </div>
 
-      {projects.length === 0 ? <div className="card"><Empty icon="▣" title="Aucune importation" text="Crée une importation par conteneur (ex. « Conteneur 40HQ — octobre 2026 ») puis rattache-lui les commandes des différentes usines. À la lecture d'une facture ou d'une proforma, Docker te la proposera directement." /></div> : (
+      {projects.length === 0 ? <div className="card"><Empty icon="▣" title="Aucune importation" text="Crée une importation par conteneur (ex. « Conteneur 40HQ — octobre 2026 ») puis rattache-lui les commandes des différentes usines. À la lecture d'une facture ou d'une proforma, Bao te la proposera directement." /></div> : (
         <div className="grid c2">
           {projects.map((p) => {
             const orders = projectOrders(db, p.id);
@@ -263,7 +263,7 @@ function ProjectDetail({ project, onEdit, edit, setEdit, onSave }: { project: Pr
       {tab === 'flux' && (
         <div className="card">
           <div className="card-head">
-            <div><h2>Liste de courses</h2><div className="small muted">Ce que tu veux recevoir en France (produits finis, quantités). Docker en déduit tous les composants à commander chez chaque usine et dessine l'arborescence.</div></div>
+            <div><h2>Liste de courses</h2><div className="small muted">Ce que tu veux recevoir en France (produits finis, quantités). Bao en déduit tous les composants à commander chez chaque usine et dessine l'arborescence.</div></div>
             <div className="row-flex">
               <button className="btn primary small" onClick={() => setContentsEdit({ lines: project.contents.map((l) => ({ ...l, kind: 'manual' as const, reason: '' })), fromProposal: false })}>{project.contents.length ? '✎ Modifier la liste' : '+ Faire ma liste'}</button>
               <button className="btn small" disabled={orders.length === 0} title="Construit la liste à partir des commandes rattachées à cette importation (proformas, factures, packing lists lus dans Documents) et des compositions des marchandises" onClick={() => {
@@ -280,7 +280,7 @@ function ProjectDetail({ project, onEdit, edit, setEdit, onSave }: { project: Pr
           </div>
           {project.consolidatorFactoryId && <div className="small muted mb">Groupage chez <b>{db.factories.find((f) => f.id === project.consolidatorFactoryId)?.name}</b> : tout converge vers cette usine, qui charge le conteneur (modifiable via « Modifier »).</div>}
           {project.contents.length === 0 ? (
-            <div className="dup-banner warn">Commence par ta liste de courses : clique <b>+ Faire ma liste</b> pour la saisir à la main, ou <b>⇣ Déduire des documents</b> pour la construire depuis les commandes rattachées à cette importation (proformas, factures, packing lists). Choisis les produits finis et les quantités. Docker calcule ensuite tous les composants nécessaires (cadres, EPP, tissu, housses…), l'usine qui fabrique chacun, et dessine l'arborescence des flux jusqu'au conteneur.</div>
+            <div className="dup-banner warn">Commence par ta liste de courses : clique <b>+ Faire ma liste</b> pour la saisir à la main, ou <b>⇣ Déduire des documents</b> pour la construire depuis les commandes rattachées à cette importation (proformas, factures, packing lists). Choisis les produits finis et les quantités. Bao calcule ensuite tous les composants nécessaires (cadres, EPP, tissu, housses…), l'usine qui fabrique chacun, et dessine l'arborescence des flux jusqu'au conteneur.</div>
           ) : (
             <div className="contents-chips">{project.contents.map((l) => { const p = db.products.find((x) => x.id === l.productId); return <span key={l.productId} className="badge" style={{ cursor: 'pointer' }} onClick={() => p && go('merchandise', p.id)}><b>{l.qty}</b> × {p?.name ?? '?'}{p?.components.length ? <span className="muted"> · {p.components.length} sous-réf.</span> : null}</span>; })}</div>
           )}
@@ -298,7 +298,7 @@ function ProjectDetail({ project, onEdit, edit, setEdit, onSave }: { project: Pr
 
       {tab === 'commandes' && (
         <>
-          {byFactory.length === 0 && <div className="card"><Empty icon="⚙" title="Aucune commande dans cette importation" text="Ajoute une commande existante ci-dessous, crée-en une, ou lis une proforma / facture : Docker proposera cette importation." /></div>}
+          {byFactory.length === 0 && <div className="card"><Empty icon="⚙" title="Aucune commande dans cette importation" text="Ajoute une commande existante ci-dessous, crée-en une, ou lis une proforma / facture : Bao proposera cette importation." /></div>}
           <div className="import-factories">
           {byFactory.map(({ factory, orders: fo }) => (
             <div className="card import-factory" key={factory?.id ?? 'none'}>
@@ -413,7 +413,7 @@ function ProjectDetail({ project, onEdit, edit, setEdit, onSave }: { project: Pr
       {tab === 'documents' && (
         <div className="card">
           <div className="card-head"><h2>Documents de l'importation</h2><button className="btn small" onClick={async () => { const added = await api.importFiles(); if (added.length) { update((d) => ({ ...d, documents: [...added, ...d.documents], projects: d.projects.map((p) => (p.id === project.id ? { ...p, docLinks: [...p.docLinks, ...added.map((x) => ({ documentId: x.id, factoryId: FR }))] } : p)) })); toast(`${added.length} document${added.length > 1 ? 's' : ''} importé${added.length > 1 ? 's' : ''} — lecture en cours…`); analyseDocs(added.map((x) => x.id), added); } }}>+ Importer des PDF</button></div>
-          <div className="small muted mb">Les documents importés ici sont lus par Docker avec cette importation pré-sélectionnée : les commandes créées s'y rattachent, et « ⇣ Déduire des documents » peut ensuite construire la liste de courses.{docs.some((d) => !d.extracted) ? <> <button className="btn small" disabled={!!docBusy} onClick={() => analyseDocs(docs.filter((d) => !d.extracted).map((d) => d.id), db.documents)}>✦ Analyser les {docs.filter((d) => !d.extracted).length} non lus</button></> : null}</div>
+          <div className="small muted mb">Les documents importés ici sont lus par Bao avec cette importation pré-sélectionnée : les commandes créées s'y rattachent, et « ⇣ Déduire des documents » peut ensuite construire la liste de courses.{docs.some((d) => !d.extracted) ? <> <button className="btn small" disabled={!!docBusy} onClick={() => analyseDocs(docs.filter((d) => !d.extracted).map((d) => d.id), db.documents)}>✦ Analyser les {docs.filter((d) => !d.extracted).length} non lus</button></> : null}</div>
           {docs.length === 0 ? <Empty icon="⇩" title="Aucun document" text="Les proformas, factures et packing lists des commandes de cette importation apparaîtront ici, ainsi que les PDF liés aux cartes de l'arborescence (bouton 📎)." /> : (
             <table className="tbl">
               <thead><tr><th>Document</th><th>Type</th><th>Rattaché à</th><th>Résumé</th><th></th></tr></thead>
@@ -607,7 +607,7 @@ function ContentsModal({ project, lines, fromProposal, onChange, onClose, onSave
   return (
     <Modal title={fromProposal ? 'Liste de courses — déduite des commandes, à vérifier' : 'Liste de courses'} onClose={onClose} wide
       footer={<><button className="btn" onClick={onClose}>Annuler</button><span style={{ flex: 1 }} /><button className="btn" onClick={() => onSave(false)}>Enregistrer</button><button className="btn primary" onClick={() => onSave(true)}>Enregistrer et générer l'arborescence</button></>}>
-      {fromProposal ? <div className="small muted mb">D'après ce qui a été commandé chez chaque usine et les compositions des marchandises. Une marchandise facturée mais qui entre dans la composition d'un autre produit de la liste (le tissu des paravents, l'EPP des Wall…) est marquée <b>composant · non chargé</b> avec une quantité 0 : elle reste chez l'usine qui assemble. Mets une quantité si tu veux quand même en charger une partie. Corrige les quantités, retire ou ajoute des lignes.</div> : <div className="small muted mb">Les produits finis que tu veux recevoir en France, avec les quantités. Docker éclate ensuite chaque produit en composants (d'après sa composition) pour te dire quoi commander chez qui.</div>}
+      {fromProposal ? <div className="small muted mb">D'après ce qui a été commandé chez chaque usine et les compositions des marchandises. Une marchandise facturée mais qui entre dans la composition d'un autre produit de la liste (le tissu des paravents, l'EPP des Wall…) est marquée <b>composant · non chargé</b> avec une quantité 0 : elle reste chez l'usine qui assemble. Mets une quantité si tu veux quand même en charger une partie. Corrige les quantités, retire ou ajoute des lignes.</div> : <div className="small muted mb">Les produits finis que tu veux recevoir en France, avec les quantités. Bao éclate ensuite chaque produit en composants (d'après sa composition) pour te dire quoi commander chez qui.</div>}
       {lines.length === 0 && <div className="muted small mb">{fromProposal ? 'Aucune proposition : aucune marchandise commandée dans cette importation, ou aucune composition ne les relie.' : 'Liste vide.'} Ajoute des lignes ci-dessous.</div>}
       <table className="tbl">
         <thead><tr><th>Marchandise chargée</th><th className="num">Quantité</th><th>Fabriquée / assemblée chez</th><th>Pourquoi</th><th></th></tr></thead>

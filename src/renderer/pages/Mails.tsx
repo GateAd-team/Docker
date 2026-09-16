@@ -11,7 +11,7 @@ import { Badge, ConfirmButton, Empty, Modal, fmtDate } from '../components/ui';
 import { newId } from '../store';
 import type { MailAnalysis, MailMessage, Partner } from '../../shared/types';
 import { SHIPMENT_STATUS, statusOf } from '../labels';
-import { shipmentForMail, suggestShipmentUpdate } from '../../shared/mailAnalysis';
+import { shipmentForMail, suggestShipmentUpdate, shipmentCostsFromAnalysis } from '../../shared/mailAnalysis';
 
 /** Trouve le transporteur / agent correspondant à une adresse (partenaire ou contact), sinon par nom. */
 export function partnerForMail(m: MailMessage, partners: Partner[], contacts: { ownerType: string; ownerId: string; email: string }[]): string | null {
@@ -66,7 +66,7 @@ export function MailsTab() {
       const tagged = r.messages.map((m) => ({ ...m, partnerId: partnerForMail(m, db.partners, db.contacts), shipmentId: m.shipmentId ?? shipmentForMail(m, db.shipments) }));
       update((d) => { let next = { ...d, mails: [...tagged, ...d.mails.filter((m) => !tagged.some((t) => t.id === m.id))], settings: { ...d.settings, gmail: { ...d.settings.gmail, lastSync: new Date().toISOString() } } }; for (const id of new Set(tagged.map((t) => t.shipmentId).filter(Boolean) as string[])) next = refreshFromMails(next, id).db; return next; });
       const more = r.remaining > 0 ? ` — encore ${r.remaining} à récupérer, relance la synchronisation` : '';
-      toast(tagged.length ? `${tagged.length} nouvel${tagged.length > 1 ? 's' : ''} email${tagged.length > 1 ? 's' : ''} récupéré${tagged.length > 1 ? 's' : ''} sur ${r.scanned} trouvé${r.scanned > 1 ? 's' : ''} dans Gmail (${sinceDays} derniers jours)${more}` : `Rien de nouveau : les ${r.scanned} emails trouvés dans Gmail (${sinceDays} derniers jours) sont déjà dans Docker`);
+      toast(tagged.length ? `${tagged.length} nouvel${tagged.length > 1 ? 's' : ''} email${tagged.length > 1 ? 's' : ''} récupéré${tagged.length > 1 ? 's' : ''} sur ${r.scanned} trouvé${r.scanned > 1 ? 's' : ''} dans Gmail (${sinceDays} derniers jours)${more}` : `Rien de nouveau : les ${r.scanned} emails trouvés dans Gmail (${sinceDays} derniers jours) sont déjà dans Bao`);
     } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
 
@@ -120,6 +120,8 @@ export function MailsTab() {
         if (p.contactName && !contacts.some((c) => c.ownerType === 'partner' && c.ownerId === id && (c.name.toLowerCase().includes(p.contactName.toLowerCase().split(' ')[0]) || (p.email && c.email && c.email.toLowerCase() === p.email.toLowerCase())))) contacts.push({ id: newId(), ownerType: 'partner', ownerId: id, name: p.contactName, role: p.contactRole ?? '', email: p.email ?? '', phone: p.phone ?? '', wechat: p.wechat ?? '', whatsapp: '' });
         for (const mid of p.mailIds ?? []) mailsNext = mailsNext.map((m) => (m.id === mid && !m.partnerId ? { ...m, partnerId: id } : m));
       });
+      const costsOf = shipmentCostsFromAnalysis;
+      const pickCosts = ({ invoiceNote: _n, ...c }: ReturnType<typeof costsOf>) => c;
       result.shipments.forEach((sh, i) => {
         if (!keep[`s${i}`]) return;
         const partnerId = partnerIdByName.get((sh.partnerName ?? '').toLowerCase()) ?? partners.find((x) => x.name.toLowerCase() === (sh.partnerName ?? '').toLowerCase())?.id ?? null;
@@ -131,10 +133,10 @@ export function MailsTab() {
         let id: string;
         if (existing) {
           id = existing.id;
-          shipments = shipments.map((x) => (x.id === id ? { ...x, partnerId: x.partnerId ?? partnerId, etd: sh.etd || x.etd, eta: sh.eta || x.eta, status: sh.status || x.status, trackingRef: x.trackingRef || sh.trackingRef || sh.containerNo || '', cbm: x.cbm || sh.cbm || 0, weightKg: x.weightKg || sh.weightKg || 0, freightCost: x.freightCost || sh.freightCost || 0, insuranceCost: x.insuranceCost || sh.insuranceCost || 0, originFees: x.originFees || sh.originFees || 0, destinationFees: x.destinationFees || sh.destinationFees || 0, notes: sh.notes && !x.notes.includes(sh.notes) ? [x.notes, sh.notes].filter(Boolean).join(' ') : x.notes } : x));
+          shipments = shipments.map((x) => (x.id === id ? { ...x, partnerId: x.partnerId ?? partnerId, etd: sh.etd || x.etd, eta: sh.eta || x.eta, status: sh.status || x.status, trackingRef: x.trackingRef || sh.trackingRef || sh.containerNo || '', cbm: x.cbm || sh.cbm || 0, weightKg: x.weightKg || sh.weightKg || 0, ...pickCosts(costsOf(x, sh)), notes: [x.notes, sh.notes && !x.notes.includes(sh.notes) ? sh.notes : '', costsOf(x, sh).invoiceNote].filter(Boolean).join(' ') } : x));
         } else {
           id = newId();
-          shipments.push({ id, projectId: null, reference: sh.reference, orderIds: [], partnerId, agentId: null, mode: sh.mode ?? 'mer', incoterm: sh.incoterm ?? 'FOB', status: sh.status, etd: sh.etd ?? '', eta: sh.eta ?? '', cbm: sh.cbm ?? 0, weightKg: sh.weightKg ?? 0, freightCost: sh.freightCost ?? 0, insuranceCost: sh.insuranceCost ?? 0, originFees: sh.originFees ?? 0, destinationFees: sh.destinationFees ?? 0, currency: sh.currency ?? 'USD', trackingRef: sh.trackingRef || sh.containerNo || '', documentId: null, notes: [sh.origin && sh.destination ? `${sh.origin} → ${sh.destination}.` : '', sh.containerNo ? `Conteneur ${sh.containerNo}.` : '', sh.notes].filter(Boolean).join(' ') });
+          shipments.push({ id, projectId: null, reference: sh.reference, orderIds: [], partnerId, agentId: null, mode: sh.mode ?? 'mer', incoterm: sh.incoterm ?? 'FOB', status: sh.status, etd: sh.etd ?? '', eta: sh.eta ?? '', cbm: sh.cbm ?? 0, weightKg: sh.weightKg ?? 0, ...pickCosts(costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '' }, sh)), trackingRef: sh.trackingRef || sh.containerNo || '', documentId: null, notes: [sh.origin && sh.destination ? `${sh.origin} → ${sh.destination}.` : '', sh.containerNo ? `Conteneur ${sh.containerNo}.` : '', sh.notes, costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '' }, sh).invoiceNote].filter(Boolean).join(' ') });
         }
         for (const mid of sh.mailIds ?? []) mailsNext = mailsNext.map((m) => (m.id === mid && !m.shipmentId ? { ...m, shipmentId: id } : m));
       });
@@ -226,7 +228,7 @@ export function MailsTab() {
         </div>
       ); })()}
       {db.mails.length === 0 ? (
-        <Empty icon="✉" title="Aucun email récupéré" text={configured || api.isDemo ? gmail.label ? `Clique « Synchroniser Gmail » : Docker lit tous les emails du libellé « ${gmail.label} ».` : 'Clique « Synchroniser Gmail » : Docker cherche les échanges avec tes transporteurs et agents (adresses de Logistique) et les objets contenant tes mots-clés (fret, booking, ETA…). Astuce : dans Réglages, indique un libellé Gmail pour lui dire exactement où chercher.' : 'Renseigne d\'abord ton adresse Gmail et un mot de passe d\'application dans Réglages.'} />
+        <Empty icon="✉" title="Aucun email récupéré" text={configured || api.isDemo ? gmail.label ? `Clique « Synchroniser Gmail » : Bao lit tous les emails du libellé « ${gmail.label} ».` : 'Clique « Synchroniser Gmail » : Bao cherche les échanges avec tes transporteurs et agents (adresses de Logistique) et les objets contenant tes mots-clés (fret, booking, ETA…). Astuce : dans Réglages, indique un libellé Gmail pour lui dire exactement où chercher.' : 'Renseigne d\'abord ton adresse Gmail et un mot de passe d\'application dans Réglages.'} />
       ) : mails.length === 0 ? <div className="muted small">Aucun email pour ce filtre.</div> : (
         <div className="mail-list">
           {mails.map((m) => {
@@ -312,7 +314,8 @@ export function MailsTab() {
               <input type="checkbox" checked={analysis.keep[`s${i}`] ?? true} onChange={(e) => setAnalysis({ ...analysis, keep: { ...analysis.keep, [`s${i}`]: e.target.checked } })} />
               <span style={{ flex: 1 }}>
                 <b>{sh.reference}</b> <Badge tone={st.tone}>{st.label}</Badge> {ex ? <Badge tone="green">met à jour « {ex.reference} »</Badge> : <Badge>nouvelle</Badge>}
-                <div className="small muted">{[sh.partnerName, sh.containerNo && `conteneur ${sh.containerNo}`, sh.origin && sh.destination && `${sh.origin} → ${sh.destination}`, sh.etd && `ETD ${fmtDate(sh.etd)}`, sh.eta && `ETA ${fmtDate(sh.eta)}`, sh.freightCost != null && `fret ${sh.freightCost} ${sh.currency}`, sh.cbm != null && `${sh.cbm} m³`].filter(Boolean).join(' · ')}</div>
+                <div className="small muted">{[sh.partnerName, sh.containerNo && `conteneur ${sh.containerNo}`, sh.origin && sh.destination && `${sh.origin} → ${sh.destination}`, sh.etd && `ETD ${fmtDate(sh.etd)}`, sh.eta && `ETA ${fmtDate(sh.eta)}`, sh.invoiceTotal ? `facture ${sh.invoiceRef || ''} : ${sh.invoiceTotal} ${sh.invoiceCurrency ?? sh.currency}` : sh.freightCost != null && `fret ${sh.freightCost} ${sh.currency}`, sh.cbm != null && `${sh.cbm} m³`].filter(Boolean).join(' · ')}</div>
+                {sh.invoiceTotal ? <div className="small" style={{ marginTop: 2 }}>Détail : fret {sh.freightCost ?? 0} · départ {sh.originFees ?? 0} · arrivée {sh.destinationFees ?? 0} · assurance {sh.insuranceCost ?? 0} {sh.invoiceCurrency ?? sh.currency}{ex ? ' — remplace les montants actuels de l\'expédition' : ''}</div> : null}
                 {sh.notes && <div className="small" style={{ marginTop: 2 }}>{sh.notes}</div>}
               </span>
             </label>

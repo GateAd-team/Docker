@@ -3,7 +3,10 @@ import { newId, useStore } from '../store';
 import { useNav } from '../App';
 import { Badge, ConfirmButton, Empty, Field, Input, Modal, NumberInput, Select, Tabs, Textarea, Timeline, fmtDate, daysUntil } from '../components/ui';
 import { MODE_LABELS, SHIPMENT_STATUS, statusOf } from '../labels';
-import type { Contact, Currency, Partner, Shipment } from '../../shared/types';
+import { KIND_LABELS } from '../../shared/extraction';
+import { api } from '../api';
+import { useViewer } from '../components/Viewer';
+import type { Contact, Currency, MailMessage, Partner, Shipment } from '../../shared/types';
 import { formatEur, formatMoney, lineCbm, orderTotalEur, shipmentTotalEur } from '../../shared/finance';
 import { MailsTab } from './Mails';
 import { findDuplicateShipments, mergeShipmentsInDb, removeShipmentFromDb } from '../../shared/mailAnalysis';
@@ -145,8 +148,24 @@ export function LogisticsPage() {
 }
 
 export function ShipmentModal({ shipment, onChange, onClose, onSave }: { shipment: Shipment; onChange: (s: Shipment) => void; onClose: () => void; onSave: () => void }) {
-  const { db, update } = useStore();
+  const { db, update, toast } = useStore();
+  const { open: openDoc } = useViewer();
+  const [importing, setImporting] = useState<string | null>(null);
   const exists = db.shipments.some((x) => x.id === shipment.id);
+  // Documents liés : rattachés à l'expédition, document de transport choisi, et pièces jointes des emails de l'expédition.
+  const linkedMails = db.mails.filter((m) => m.shipmentId === shipment.id).sort((a, b) => b.date.localeCompare(a.date));
+  const linkedDocs = db.documents.filter((d) => d.id === shipment.documentId || d.linkedTo.some((l) => l.type === 'shipment' && l.id === shipment.id) || linkedMails.some((m) => m.attachments.some((a) => a.documentId === d.id)));
+  const pendingAttachments = linkedMails.flatMap((m) => m.attachments.filter((a) => !a.documentId && /pdf|image/i.test(a.mimeType || a.filename)).map((a) => ({ m, a })));
+  const importAttachment = async (m: MailMessage, index: number) => {
+    setImporting(`${m.id}:${index}`);
+    try {
+      const doc = await api.mailAttachment(m.id, index);
+      if (!doc) { toast(api.isDemo ? 'Mode démo : import des pièces jointes indisponible' : 'Pièce jointe introuvable', true); return; }
+      const linked = [...doc.linkedTo, ...(m.partnerId ? [{ type: 'partner' as const, id: m.partnerId }] : []), { type: 'shipment' as const, id: shipment.id }];
+      update((d) => ({ ...d, documents: [{ ...doc, linkedTo: linked }, ...d.documents], mails: d.mails.map((x) => (x.id === m.id ? { ...x, attachments: x.attachments.map((a) => (a.index === index ? { ...a, documentId: doc.id } : a)) } : x)) }));
+      toast(`« ${doc.fileName} » ajouté aux documents de l'expédition`);
+    } catch (e) { toast((e as Error).message, true); } finally { setImporting(null); }
+  };
   const others = db.shipments.filter((x) => x.id !== shipment.id);
   const [mergeFrom, setMergeFrom] = useState('');
   const transporters = db.partners.filter((p) => p.type === 'transporteur');
@@ -185,6 +204,32 @@ export function ShipmentModal({ shipment, onChange, onClose, onSave }: { shipmen
         </label>
       ))}
       {estCbm > 0 && <div className="small muted mt">Volume estimé d'après le colisage des produits : {estCbm.toFixed(2)} m³.</div>}
+
+      {exists && (
+        <>
+          <h3 className="mt">Documents de l'expédition <span className="muted small">({linkedDocs.length})</span></h3>
+          {linkedDocs.length === 0 && pendingAttachments.length === 0 && <div className="muted small">Aucun document rattaché. Rattache des emails à cette expédition (onglet Emails) ou analyse un document en choisissant cette expédition.</div>}
+          {linkedDocs.length > 0 && (
+            <div style={{ overflowX: 'auto' }}><table className="tbl">
+              <thead><tr><th>Document</th><th>Type</th><th>Reçu</th><th>Source</th><th></th></tr></thead>
+              <tbody>{linkedDocs.map((d) => { const m = linkedMails.find((x) => x.attachments.some((a) => a.documentId === d.id)); return (
+                <tr key={d.id}>
+                  <td><a style={{ cursor: 'pointer' }} onClick={() => openDoc(d.id)}>📄 {d.fileName}</a>{d.summary ? <div className="small muted">{d.summary.slice(0, 120)}</div> : null}</td>
+                  <td><Badge>{KIND_LABELS[d.kind] ?? d.kind}</Badge></td>
+                  <td className="small">{fmtDate((m?.date ?? d.createdAt).slice(0, 10))}</td>
+                  <td className="small muted">{m ? `Email · ${m.fromName || m.from}` : d.id === shipment.documentId ? 'Document de transport' : 'Documents'}</td>
+                  <td className="num"><button className="btn ghost small" onClick={() => openDoc(d.id)}>Ouvrir</button></td>
+                </tr>
+              ); })}</tbody>
+            </table></div>
+          )}
+          {pendingAttachments.length > 0 && (
+            <div className="small mt"><span className="muted">Pièces jointes des emails pas encore importées : </span>
+              {pendingAttachments.map(({ m, a }) => <button key={`${m.id}:${a.index}`} className="btn ghost small" disabled={importing === `${m.id}:${a.index}`} onClick={() => importAttachment(m, a.index)}>{importing === `${m.id}:${a.index}` ? '…' : `📎 ${a.filename}`}</button>)}
+            </div>
+          )}
+        </>
+      )}
 
       <h3 className="mt">Coûts logistiques</h3>
       <div className="form c4">

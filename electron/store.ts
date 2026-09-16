@@ -12,13 +12,17 @@ let migrated = false;
 
 export function dataDir(): string {
   const dir = path.join(app.getPath('userData'), 'docker-data');
-  // Version installée (dossier "Docker") lancée pour la première fois sur un poste qui utilisait la version
-  // de développement (dossier "docker-import-manager") : on récupère les données existantes.
+  // Version installée (dossier "Bao") lancée pour la première fois sur un poste qui utilisait l'ancien nom
+  // ("Docker") ou la version de développement (dossier "docker-import-manager") : on récupère les données existantes.
   if (!migrated) {
     migrated = true;
-    const legacy = path.join(path.dirname(app.getPath('userData')), 'docker-import-manager', 'docker-data');
-    if (!fs.existsSync(path.join(dir, 'database.json')) && fs.existsSync(path.join(legacy, 'database.json'))) {
-      try { fs.cpSync(legacy, dir, { recursive: true }); } catch (e) { console.error('Migration des données impossible', e); }
+    if (!fs.existsSync(path.join(dir, 'database.json'))) {
+      for (const name of ['Docker', 'docker-import-manager']) {
+        const legacy = path.join(path.dirname(app.getPath('userData')), name, 'docker-data');
+        if (!fs.existsSync(path.join(legacy, 'database.json'))) continue;
+        try { fs.cpSync(legacy, dir, { recursive: true }); } catch (e) { console.error('Migration des données impossible', e); }
+        break;
+      }
     }
   }
   fs.mkdirSync(path.join(dir, 'files'), { recursive: true });

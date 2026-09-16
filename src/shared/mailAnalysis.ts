@@ -4,8 +4,8 @@
  */
 import type { Database, MailMessage, Shipment } from './types';
 
-export const MAIL_ANALYSIS_SYSTEM = `Tu es l'assistant logistique de "Docker", un logiciel de gestion des importations depuis la Chine (société : Wall Up, France).
-On te donne des emails échangés avec des transporteurs (freight forwarders), transitaires, agents de sourcing / contrôle qualité en Chine, leurs PIÈCES JOINTES PDF (devis de fret, booking, bill of lading, factures, packing lists, rapports d'inspection — lis-les en entier : c'est là que sont les prix, volumes, poids, numéros de conteneur, dates et statut du transit) et ce que Docker connaît déjà.
+export const MAIL_ANALYSIS_SYSTEM = `Tu es l'assistant logistique de "Bao", un logiciel de gestion des importations depuis la Chine (société : Wall Up, France).
+On te donne des emails échangés avec des transporteurs (freight forwarders), transitaires, agents de sourcing / contrôle qualité en Chine, leurs PIÈCES JOINTES PDF (devis de fret, booking, bill of lading, factures, packing lists, rapports d'inspection — lis-les en entier : c'est là que sont les prix, volumes, poids, numéros de conteneur, dates et statut du transit) et ce que Bao connaît déjà.
 Ta mission : en extraire TOUTES les informations utiles, sans rien inventer, et répondre UNIQUEMENT via l'outil enregistrer_analyse_emails.
 
 Règles :
@@ -13,7 +13,7 @@ Règles :
   summary : bilan en français (5 à 10 lignes) de la relation : ce qui a été fait, prix pratiqués, délais constatés, problèmes, ton de la relation.
   actions : ce que l'on attend de MOI ou ce que j'attends d'EUX (documents à envoyer, paiement, confirmation, relance…), avec dueDate (AAAA-MM-JJ) si une date est mentionnée sinon "", et mailId de l'email source.
   mailIds : les ids des emails qui concernent ce partenaire.
-- shipments : une entrée par expédition / conteneur réellement évoquée (booking, B/L, numéro de conteneur, ETD/ETA, devis de fret accepté). existingId si elle correspond à une expédition connue (même n° de conteneur, de suivi, de booking ou de référence, ou même trajet à la même période) — IMPORTANT : ne crée JAMAIS de doublon ; si un email est déjà rattaché à une expédition Docker (« Expédition Docker : id »), c'est forcément celle-là (existingId). Une seule entrée par conteneur réel, en fusionnant les informations de tous les emails et PDF. reference : libellé court (ex. "FCL 40HQ Shenzhen → Le Havre sept. 2026"). Statut : planifiee (devis / booking pas parti), collectee (marchandise chez le transitaire), en_transit (parti), dedouanement, livree. Montants : nombres (null si inconnu), currency de l'email. notes : n° B/L, navire, port, frais annexes, incidents.
+- shipments : une entrée par expédition / conteneur réellement évoquée (booking, B/L, numéro de conteneur, ETD/ETA, devis de fret accepté). existingId si elle correspond à une expédition connue (même n° de conteneur, de suivi, de booking ou de référence, ou même trajet à la même période) — IMPORTANT : ne crée JAMAIS de doublon ; si un email est déjà rattaché à une expédition Bao (« Expédition Bao : id »), c'est forcément celle-là (existingId). Une seule entrée par conteneur réel, en fusionnant les informations de tous les emails et PDF. reference : libellé court (ex. "FCL 40HQ Shenzhen → Le Havre sept. 2026"). Statut : planifiee (devis / booking pas parti), collectee (marchandise chez le transitaire), en_transit (parti), dedouanement, livree. Montants : nombres (null si inconnu), currency de l'email. FACTURES : si une facture de transport (PDF joint, ou montants détaillés dans l'email) est présente, reporte EXACTEMENT ses montants dans SA devise (freightCost = fret / ocean freight, originFees = frais au départ, destinationFees = frais à l'arrivée : THC, dédouanement, livraison, insuranceCost = assurance) et renseigne invoiceTotal = le total de la facture tel qu'imprimé (le total HT si TVA, sinon le total), invoiceRef = son numéro, invoiceCurrency = sa devise ; la somme freightCost + originFees + destinationFees + insuranceCost doit être égale à invoiceTotal (mets dans freightCost ce que tu ne sais pas classer). Une facture remplace toujours un devis ou une estimation antérieure. notes : n° B/L, navire, port, frais annexes, incidents.
 - overview : 3 à 6 lignes en français, vue d'ensemble : où en est la logistique, ce qui presse.
 - Dates au format AAAA-MM-JJ. Pas de texte en dehors de l'outil.`;
 
@@ -37,6 +37,7 @@ export const MAIL_ANALYSIS_TOOL = {
         status: { type: 'string', enum: ['planifiee', 'collectee', 'en_transit', 'dedouanement', 'livree'] },
         cbm: { type: ['number', 'null'] }, weightKg: { type: ['number', 'null'] }, freightCost: { type: ['number', 'null'] }, insuranceCost: { type: ['number', 'null'] }, originFees: { type: ['number', 'null'] }, destinationFees: { type: ['number', 'null'] },
         currency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'CNY'] }, notes: { type: 'string' }, mailIds: { type: 'array', items: { type: 'string' } },
+        invoiceTotal: { type: ['number', 'null'], description: 'Total de la facture de transport, si une facture est présente' }, invoiceRef: { type: 'string' }, invoiceCurrency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'CNY'] },
       }, required: ['reference', 'status'] } },
       overview: { type: 'string' },
     },
@@ -48,7 +49,7 @@ export const MAIL_ANALYSIS_TOOL = {
 export function buildMailAnalysisPrompt(db: Pick<Database, 'partners' | 'shipments' | 'contacts'>, mails: MailMessage[]): string {
   const known = db.partners.map((p) => `- ${p.id} · ${p.name} (${p.type}) ${p.email || ''} ${p.city || ''}${db.contacts.filter((c) => c.ownerType === 'partner' && c.ownerId === p.id).map((c) => ` · contact ${c.name} ${c.email}`).join('')}`).join('\n') || '(aucun)';
   const ships = db.shipments.map((s) => `- ${s.id} · ${s.reference} · statut ${s.status} · suivi ${s.trackingRef || '—'} · ETD ${s.etd || '—'} ETA ${s.eta || '—'}${s.notes ? ` · ${s.notes.slice(0, 120)}` : ''}`).join('\n') || '(aucune)';
-  const body = mails.map((m) => `=== EMAIL id=${m.id}\nDate : ${m.date.slice(0, 10)}\nDe : ${m.fromName} <${m.from}>\nÀ : ${m.to}\nObjet : ${m.subject}${m.shipmentId ? `\nExpédition Docker : ${m.shipmentId}` : ''}\nPièces jointes : ${m.attachments.map((a) => a.filename).join(', ') || 'aucune'}\n\n${m.text.slice(0, 5000)}`).join('\n\n');
+  const body = mails.map((m) => `=== EMAIL id=${m.id}\nDate : ${m.date.slice(0, 10)}\nDe : ${m.fromName} <${m.from}>\nÀ : ${m.to}\nObjet : ${m.subject}${m.shipmentId ? `\nExpédition Bao : ${m.shipmentId}` : ''}\nPièces jointes : ${m.attachments.map((a) => a.filename).join(', ') || 'aucune'}\n\n${m.text.slice(0, 5000)}`).join('\n\n');
   return `Partenaires déjà connus :\n${known}\n\nExpéditions déjà connues :\n${ships}\n\nEmails à analyser (${mails.length}) :\n\n${body}`;
 }
 
@@ -107,6 +108,35 @@ export function suggestShipmentUpdate(m: { date: string; subject: string; text: 
   const etd = parseDateNear(text, /\b(etd|estimated (time of )?departure|d[ée]part pr[ée]vu|departure date|sailing date|vessel departs?|d[ée]part le)\s*[:\-–]?\s*/i, year);
   const eta = parseDateNear(text, /\b(eta|estimated (time of )?arrival|arriv[ée]e pr[ée]vue|arrival date|arriving|arrival at [a-z ]+|arrivera le)\s*[:\-–]?\s*/i, year);
   return { status, etd: etd && etd !== shipment.etd ? etd : '', eta: eta && eta !== shipment.eta ? eta : '', evidence };
+}
+
+/**
+ * Montants d'une expédition proposés par l'analyse d'emails. Si une facture est présente (invoiceTotal), ses montants
+ * remplacent ce qui était connu (devis, estimation) et le total est forcé à celui de la facture ; sinon on complète
+ * seulement les montants manquants.
+ */
+export function shipmentCostsFromAnalysis(
+  current: Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency' | 'notes'>,
+  sh: { freightCost?: number | null; insuranceCost?: number | null; originFees?: number | null; destinationFees?: number | null; currency?: Shipment['currency']; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: Shipment['currency'] },
+): Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency'> & { invoiceNote: string } {
+  const n = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : 0);
+  if (n(sh.invoiceTotal) > 0) {
+    const total = n(sh.invoiceTotal);
+    let freight = n(sh.freightCost), ins = n(sh.insuranceCost), org = n(sh.originFees), dst = n(sh.destinationFees);
+    const others = ins + org + dst;
+    if (Math.abs(freight + others - total) > 0.01) {
+      if (others <= total) freight = Math.round((total - others) * 100) / 100;   // le fret absorbe l'écart
+      else { freight = total; ins = 0; org = 0; dst = 0; }                        // détail incohérent : tout dans le fret
+    }
+    const invoiceNote = `Facture ${sh.invoiceRef || 'transport'} : ${total} ${sh.invoiceCurrency ?? sh.currency ?? current.currency}.`;
+    return { freightCost: freight, insuranceCost: ins, originFees: org, destinationFees: dst, currency: sh.invoiceCurrency ?? sh.currency ?? current.currency, invoiceNote: current.notes.includes(invoiceNote) ? '' : invoiceNote };
+  }
+  const had = current.freightCost || current.insuranceCost || current.originFees || current.destinationFees;
+  return {
+    freightCost: current.freightCost || n(sh.freightCost), insuranceCost: current.insuranceCost || n(sh.insuranceCost),
+    originFees: current.originFees || n(sh.originFees), destinationFees: current.destinationFees || n(sh.destinationFees),
+    currency: had ? current.currency : (sh.currency ?? current.currency), invoiceNote: '',
+  };
 }
 
 /* ------------------------------------------------------------------------------------------------

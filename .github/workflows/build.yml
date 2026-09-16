@@ -1,6 +1,6 @@
-# Compile Docker pour Windows (.exe) et Mac (.dmg) à chaque push sur main,
+# Compile Bao pour Windows (.exe) et Mac (.dmg) à chaque push sur main,
 # puis publie les installeurs dans la page "Releases" du dépôt (release "v<version>" du package.json).
-name: Build Docker
+name: Build Bao
 
 on:
   push:
@@ -39,6 +39,8 @@ jobs:
           path: |
             release/*.exe
             release/*.dmg
+            release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
 
   release:
@@ -55,9 +57,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.v.outputs.version }}
-          name: Docker ${{ steps.v.outputs.version }}
+          name: Bao ${{ steps.v.outputs.version }}
           body: |
-            Installeurs Docker (BudinBox).
+            Installeurs Bao (BudinBox). Les postes déjà équipés peuvent aussi passer par Réglages → Mise à jour de Bao.
             - **Windows** : téléchargez le `.exe` et lancez-le.
-            - **Mac** : téléchargez le `.dmg` (`arm64` pour les Mac Apple Silicon M1/M2/M3/M4, `x64` pour les Mac Intel), glissez Docker dans Applications. Au premier lancement : clic droit → Ouvrir (app non signée), ou dans le Terminal `xattr -dr com.apple.quarantine /Applications/Docker.app`.
+            - **Mac** : téléchargez le `.dmg` (`arm64` pour les Mac Apple Silicon M1/M2/M3/M4, `x64` pour les Mac Intel), glissez Bao dans Applications. Au premier lancement : clic droit → Ouvrir (app non signée), ou dans le Terminal `xattr -dr com.apple.quarantine /Applications/Bao.app`.
           files: installers/*

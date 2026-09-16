@@ -5,6 +5,7 @@ import { loadDb, saveDb, storeFile, storeBuffer } from './store';
 import { analyzeMails, chat, extractDocument, testApiKey } from './ai';
 import { connectGoogle, fetchAttachment, importEml, listLabels, syncMail, testMail } from './mail';
 import { Cloud } from './cloud';
+import { Updater } from './updater';
 import type { CloudStatus, Database } from '../src/shared/types';
 
 let db: Database;
@@ -33,7 +34,7 @@ function createWindow() {
     height: 860,
     minWidth: 1000,
     minHeight: 640,
-    title: 'Docker',
+    title: 'Bao',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -74,6 +75,11 @@ app.whenReady().then(() => {
   ipcMain.handle('cloud:regenerateCode', () => cloud.regenerateCode());
   ipcMain.handle('cloud:updateAccount', (_e, patch) => cloud.updateAccount(patch));
   ipcMain.handle('fx:fetch', () => fetchRates());
+  const updater = new Updater((s) => send('update:status', s));
+  ipcMain.handle('update:status', () => updater.get());
+  ipcMain.handle('update:check', () => updater.check());
+  ipcMain.handle('update:download', () => updater.download());
+  ipcMain.handle('update:install', () => updater.install());
   ipcMain.handle('cloud:syncNow', async () => { await cloud.sync(); return cloud.getStatus(); });
   ipcMain.handle('cloud:pushLocal', async () => { await cloud.pushLocal(); return cloud.getStatus(); });
 

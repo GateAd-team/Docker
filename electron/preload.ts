@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Database, DockerApi } from '../src/shared/types';
+import type { Database, DockerApi, UpdateStatus } from '../src/shared/types';
 
 const api: DockerApi = {
   isDemo: false,
@@ -30,6 +30,11 @@ const api: DockerApi = {
   cloudRegenerateCode: () => ipcRenderer.invoke('cloud:regenerateCode'),
   cloudUpdateAccount: (patch) => ipcRenderer.invoke('cloud:updateAccount', patch),
   fetchRates: () => ipcRenderer.invoke('fx:fetch'),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateDownload: () => ipcRenderer.invoke('update:download'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (cb) => { const h = (_e: unknown, s: UpdateStatus) => cb(s); ipcRenderer.on('update:status', h); return () => ipcRenderer.removeListener('update:status', h); },
   cloudSyncNow: () => ipcRenderer.invoke('cloud:syncNow'),
   cloudPushLocal: () => ipcRenderer.invoke('cloud:pushLocal'),
   onRemoteDb: (cb) => { const h = (_e: unknown, d: Database) => cb(d); ipcRenderer.on('db:remote', h); return () => ipcRenderer.removeListener('db:remote', h); },

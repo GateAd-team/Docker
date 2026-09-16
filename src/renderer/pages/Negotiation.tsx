@@ -1,5 +1,5 @@
 /**
- * Onglet Négociation d'une importation : pour chaque usine de l'arborescence, Docker prépare
+ * Onglet Négociation d'une importation : pour chaque usine de l'arborescence, Bao prépare
  * la demande de prix (EN + 中文), lit les réponses (captures WeChat, PDF), propose les contre-offres
  * et enregistre les prix convenus dans l'historique. L'utilisateur garde l'envoi et la décision.
  */
@@ -78,13 +78,13 @@ export function NegotiationTab({ project, onCreateOrder }: { project: Project; o
     toast(`Accord enregistré : ${quotes.length} prix ajouté${quotes.length > 1 ? 's' : ''} à l'historique`);
   };
 
-  if (factoryIds.length === 0) return <div className="card"><Empty icon="🤝" title="Rien à négocier pour l'instant" text="Remplis d'abord la liste de courses (onglet Arborescence des flux) : Docker en déduit les usines à consulter et prépare les demandes de prix." /></div>;
+  if (factoryIds.length === 0) return <div className="card"><Empty icon="🤝" title="Rien à négocier pour l'instant" text="Remplis d'abord la liste de courses (onglet Arborescence des flux) : Bao en déduit les usines à consulter et prépare les demandes de prix." /></div>;
 
   return (
     <>
       <div className="card">
         <div className="card-head">
-          <div><h2>Négociation assistée</h2><div className="small muted">Docker rédige les demandes de prix et les contre-offres (anglais + chinois), lit les réponses WeChat en capture d'écran et te propose le prochain coup. Toi, tu copies-colles et tu décides.</div></div>
+          <div><h2>Négociation assistée</h2><div className="small muted">Bao rédige les demandes de prix et les contre-offres (anglais + chinois), lit les réponses WeChat en capture d'écran et te propose le prochain coup. Toi, tu copies-colles et tu décides.</div></div>
           <div className="row-flex small">
             <label className="muted">Signature</label>
             <input value={db.settings.senderName} placeholder="Prénom" onChange={(e) => update((d) => ({ ...d, settings: { ...d.settings, senderName: e.target.value } }))} style={{ width: 90 }} />

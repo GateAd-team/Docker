@@ -91,7 +91,7 @@ export function FlowGraph({ project, needs, onEditFlow, onAddFlow, onLayout, onL
     if (changed || Object.keys(next).length !== Object.keys(heights).length) setHeights(next);
   });
 
-  // --- Glisser-déposer des cartes (souris, comme ailleurs dans Docker).
+  // --- Glisser-déposer des cartes (souris, comme ailleurs dans Bao).
   const startDrag = (id: string, e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const p = posOf(id);

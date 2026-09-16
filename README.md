@@ -1,10 +1,10 @@
-# Docker — gestion des importations depuis la Chine
+# Bao — gestion des importations depuis la Chine
 
 Application de bureau (Mac / Windows / Linux) pour piloter des projets d'importation :
 R&D et plans techniques, usines et contacts, commandes et logistique, coût de revient et marges.
 Les documents (PDF, photos, captures d'écran) sont lus par l'API Claude et transformés en fiches.
 
-Nom provisoire : **Docker**. Destinée à devenir un agent de **BudinBox**.
+Nom provisoire : **Bao**. Destinée à devenir un agent de **BudinBox**.
 
 ## Démarrage rapide
 
@@ -40,7 +40,7 @@ Le dépôt GitHub compile automatiquement les installeurs (`.github/workflows/bu
 `package.json`, commit, push. Compilation locale possible avec `npm run dist:win` (sur PC) ou `npm run dist:mac` (sur Mac).
 
 Le `.dmg` n'est pas encore signé : au premier lancement sur Mac, clic droit → Ouvrir, ou
-`xattr -dr com.apple.quarantine /Applications/Docker.app`. Pour signer/notariser, ajouter les secrets
+`xattr -dr com.apple.quarantine /Applications/Bao.app`. Pour signer/notariser, ajouter les secrets
 `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` au dépôt et retirer
 `CSC_IDENTITY_AUTO_DISCOVERY` du workflow.
 
@@ -72,8 +72,8 @@ test/finance.test.ts tests unitaires des calculs
 
 Tout est dans un seul objet `Database` (voir `types.ts`) : tableaux plats reliés par `id`.
 Sur disque : `<userData>/docker-data/database.json` (écriture atomique) et les fichiers importés dans
-`<userData>/docker-data/files/`. `userData` = `~/Library/Application Support/Docker` sur Mac,
-`%APPDATA%/Docker` sur Windows.
+`<userData>/docker-data/files/`. `userData` = `~/Library/Application Support/Bao` sur Mac,
+`%APPDATA%/Bao` sur Windows.
 
 Le renderer charge la base entière au démarrage, la modifie de façon immuable (`update(db => ...)`)
 et la renvoie au process principal qui l'écrit. Simple et suffisant pour quelques milliers d'objets ;

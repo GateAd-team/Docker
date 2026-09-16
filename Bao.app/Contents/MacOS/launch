@@ -1,0 +1,24 @@
+#!/bin/bash
+# Lanceur macOS de Bao : cherche le dossier docker-app à côté de l'app, installe les dépendances si besoin, démarre.
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+APPDIR=""
+for c in "$DIR/docker-app" "$DIR" "$HOME/Documents/docker-app" "$HOME/Documents/BudinBox/docker-app"; do
+  if [ -f "$c/package.json" ] && grep -q '"docker' "$c/package.json" 2>/dev/null; then APPDIR="$c"; break; fi
+done
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+if ! command -v node >/dev/null 2>&1; then
+  osascript -e 'display dialog "Node.js n'"'"'est pas installé. Installe-le depuis nodejs.org (version LTS) puis relance Bao." buttons {"OK"} default button 1 with icon caution with title "Bao"'
+  open "https://nodejs.org/fr/download"; exit 1
+fi
+if [ -z "$APPDIR" ]; then
+  osascript -e 'display dialog "Le dossier docker-app est introuvable. Place Bao.app à côté du dossier docker-app (ou le dossier dans Documents)." buttons {"OK"} default button 1 with icon caution with title "Bao"'
+  exit 1
+fi
+cd "$APPDIR"
+LOG="$HOME/Library/Logs/docker-app.log"; mkdir -p "$(dirname "$LOG")"
+{
+  echo "=== $(date) — lancement depuis $APPDIR"
+  if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then npm install --no-audit --no-fund; fi
+  npm run dev
+} >> "$LOG" 2>&1 &
+exit 0

@@ -1,5 +1,5 @@
 /**
- * Calculs financiers de Docker : conversion de devises, coût de revient (landed cost),
+ * Calculs financiers de Bao : conversion de devises, coût de revient (landed cost),
  * droits de douane, marges par marché. Fonctions pures, testées dans test/finance.test.ts.
  */
 import type {

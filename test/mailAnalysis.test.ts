@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shipmentForMail, suggestShipmentUpdate } from '../src/shared/mailAnalysis';
+import { shipmentForMail, suggestShipmentUpdate, shipmentCostsFromAnalysis } from '../src/shared/mailAnalysis';
 
 const ship = { id: 's1', reference: 'FCL-2026-09 (40HQ)', trackingRef: 'MSKU1234567', status: 'planifiee' as const, etd: '2026-08-28', eta: '', notes: '' };
 
@@ -38,5 +38,22 @@ describe('doublons d\'expéditions', async () => {
   it('détache les emails à la suppression', () => {
     const d = removeShipmentFromDb({ shipments: [base], mails: [{ shipmentId: 'a' }, { shipmentId: null }] }, 'a');
     expect(d.shipments).toEqual([]); expect(d.mails[0].shipmentId).toBeNull();
+  });
+});
+
+describe('shipmentCostsFromAnalysis', () => {
+  const cur = { freightCost: 1200, insuranceCost: 0, originFees: 150, destinationFees: 0, currency: 'USD' as const, notes: '' };
+  it('une facture remplace le devis et force le total', () => {
+    const r = shipmentCostsFromAnalysis(cur, { freightCost: 1800, originFees: 200, destinationFees: 350, insuranceCost: null, invoiceTotal: 2400, invoiceRef: 'F-2026-118', invoiceCurrency: 'EUR' });
+    expect(r.freightCost + r.originFees + r.destinationFees + r.insuranceCost).toBe(2400);
+    expect(r.freightCost).toBe(1850); expect(r.currency).toBe('EUR'); expect(r.invoiceNote).toContain('F-2026-118');
+  });
+  it('détail incohérent : tout dans le fret', () => {
+    const r = shipmentCostsFromAnalysis(cur, { originFees: 3000, invoiceTotal: 2400, invoiceCurrency: 'USD' });
+    expect(r).toMatchObject({ freightCost: 2400, originFees: 0, destinationFees: 0, insuranceCost: 0 });
+  });
+  it('sans facture : on complète seulement les montants manquants', () => {
+    const r = shipmentCostsFromAnalysis(cur, { freightCost: 999, destinationFees: 400, currency: 'EUR' });
+    expect(r).toMatchObject({ freightCost: 1200, originFees: 150, destinationFees: 400, currency: 'USD', invoiceNote: '' });
   });
 });
