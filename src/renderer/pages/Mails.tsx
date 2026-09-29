@@ -9,7 +9,8 @@ import { api } from '../api';
 import { useViewer } from '../components/Viewer';
 import { Badge, ConfirmButton, Empty, Modal, fmtDate } from '../components/ui';
 import { newId } from '../store';
-import type { MailAnalysis, MailMessage, Partner } from '../../shared/types';
+import type { Currency, MailAnalysis, MailMessage, Partner } from '../../shared/types';
+import { toEur } from '../../shared/finance';
 import { SHIPMENT_STATUS, statusOf } from '../labels';
 import { shipmentForMail, suggestShipmentUpdate, shipmentCostsFromAnalysis } from '../../shared/mailAnalysis';
 
@@ -120,8 +121,9 @@ export function MailsTab() {
         if (p.contactName && !contacts.some((c) => c.ownerType === 'partner' && c.ownerId === id && (c.name.toLowerCase().includes(p.contactName.toLowerCase().split(' ')[0]) || (p.email && c.email && c.email.toLowerCase() === p.email.toLowerCase())))) contacts.push({ id: newId(), ownerType: 'partner', ownerId: id, name: p.contactName, role: p.contactRole ?? '', email: p.email ?? '', phone: p.phone ?? '', wechat: p.wechat ?? '', whatsapp: '' });
         for (const mid of p.mailIds ?? []) mailsNext = mailsNext.map((m) => (m.id === mid && !m.partnerId ? { ...m, partnerId: id } : m));
       });
-      const costsOf = shipmentCostsFromAnalysis;
-      const pickCosts = ({ invoiceNote: _n, ...c }: ReturnType<typeof costsOf>) => c;
+      const rate = (from: Currency, to: Currency) => { const a = toEur(1, from, d.settings), b = toEur(1, to, d.settings); return a > 0 && b > 0 ? a / b : 1; };
+      const costsOf = (cur: Parameters<typeof shipmentCostsFromAnalysis>[0], sh: Parameters<typeof shipmentCostsFromAnalysis>[1]) => shipmentCostsFromAnalysis(cur, sh, rate);
+      const pickCosts = ({ invoiceNote: _n, mode: _m, ...c }: ReturnType<typeof costsOf>) => c;
       result.shipments.forEach((sh, i) => {
         if (!keep[`s${i}`]) return;
         const partnerId = partnerIdByName.get((sh.partnerName ?? '').toLowerCase()) ?? partners.find((x) => x.name.toLowerCase() === (sh.partnerName ?? '').toLowerCase())?.id ?? null;
@@ -136,7 +138,7 @@ export function MailsTab() {
           shipments = shipments.map((x) => (x.id === id ? { ...x, partnerId: x.partnerId ?? partnerId, etd: sh.etd || x.etd, eta: sh.eta || x.eta, status: sh.status || x.status, trackingRef: x.trackingRef || sh.trackingRef || sh.containerNo || '', cbm: x.cbm || sh.cbm || 0, weightKg: x.weightKg || sh.weightKg || 0, ...pickCosts(costsOf(x, sh)), notes: [x.notes, sh.notes && !x.notes.includes(sh.notes) ? sh.notes : '', costsOf(x, sh).invoiceNote].filter(Boolean).join(' ') } : x));
         } else {
           id = newId();
-          shipments.push({ id, projectId: null, reference: sh.reference, orderIds: [], partnerId, agentId: null, mode: sh.mode ?? 'mer', incoterm: sh.incoterm ?? 'FOB', status: sh.status, etd: sh.etd ?? '', eta: sh.eta ?? '', cbm: sh.cbm ?? 0, weightKg: sh.weightKg ?? 0, ...pickCosts(costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '' }, sh)), trackingRef: sh.trackingRef || sh.containerNo || '', documentId: null, notes: [sh.origin && sh.destination ? `${sh.origin} → ${sh.destination}.` : '', sh.containerNo ? `Conteneur ${sh.containerNo}.` : '', sh.notes, costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '' }, sh).invoiceNote].filter(Boolean).join(' ') });
+          shipments.push({ id, projectId: null, reference: sh.reference, orderIds: [], partnerId, agentId: null, mode: sh.mode ?? 'mer', incoterm: sh.incoterm ?? 'FOB', status: sh.status, etd: sh.etd ?? '', eta: sh.eta ?? '', cbm: sh.cbm ?? 0, weightKg: sh.weightKg ?? 0, ...pickCosts(costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '', invoices: [] }, sh)), trackingRef: sh.trackingRef || sh.containerNo || '', documentId: null, notes: [sh.origin && sh.destination ? `${sh.origin} → ${sh.destination}.` : '', sh.containerNo ? `Conteneur ${sh.containerNo}.` : '', sh.notes, costsOf({ freightCost: 0, insuranceCost: 0, originFees: 0, destinationFees: 0, currency: sh.currency ?? 'USD', notes: '', invoices: [] }, sh).invoiceNote].filter(Boolean).join(' ') });
         }
         for (const mid of sh.mailIds ?? []) mailsNext = mailsNext.map((m) => (m.id === mid && !m.shipmentId ? { ...m, shipmentId: id } : m));
       });
@@ -315,7 +317,7 @@ export function MailsTab() {
               <span style={{ flex: 1 }}>
                 <b>{sh.reference}</b> <Badge tone={st.tone}>{st.label}</Badge> {ex ? <Badge tone="green">met à jour « {ex.reference} »</Badge> : <Badge>nouvelle</Badge>}
                 <div className="small muted">{[sh.partnerName, sh.containerNo && `conteneur ${sh.containerNo}`, sh.origin && sh.destination && `${sh.origin} → ${sh.destination}`, sh.etd && `ETD ${fmtDate(sh.etd)}`, sh.eta && `ETA ${fmtDate(sh.eta)}`, sh.invoiceTotal ? `facture ${sh.invoiceRef || ''} : ${sh.invoiceTotal} ${sh.invoiceCurrency ?? sh.currency}` : sh.freightCost != null && `fret ${sh.freightCost} ${sh.currency}`, sh.cbm != null && `${sh.cbm} m³`].filter(Boolean).join(' · ')}</div>
-                {sh.invoiceTotal ? <div className="small" style={{ marginTop: 2 }}>Détail : fret {sh.freightCost ?? 0} · départ {sh.originFees ?? 0} · arrivée {sh.destinationFees ?? 0} · assurance {sh.insuranceCost ?? 0} {sh.invoiceCurrency ?? sh.currency}{ex ? ' — remplace les montants actuels de l\'expédition' : ''}</div> : null}
+                {sh.invoiceTotal ? <div className="small" style={{ marginTop: 2 }}>Détail : fret {sh.freightCost ?? 0} · départ {sh.originFees ?? 0} · arrivée {sh.destinationFees ?? 0} · assurance {sh.insuranceCost ?? 0} {sh.invoiceCurrency ?? sh.currency}{ex ? (() => { const m = shipmentCostsFromAnalysis(ex, sh).mode; return m === 'add' ? ' — facture complémentaire : s\'ajoute aux coûts actuels' : m === 'known' ? ' — facture déjà comptée, rien ne change' : ' — remplace le devis / les montants actuels'; })() : ''}</div> : null}
                 {sh.notes && <div className="small" style={{ marginTop: 2 }}>{sh.notes}</div>}
               </span>
             </label>

@@ -1,7 +1,7 @@
 {
   "name": "docker-import-manager",
   "productName": "Bao",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Bao — gestion des projets d'importation depuis la Chine (module BudinBox)",
   "main": "dist-electron/electron/main.js",
   "private": true,

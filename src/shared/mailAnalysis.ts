@@ -2,7 +2,7 @@
  * Analyse IA d'un lot d'emails transporteurs / agents : instructions et schéma de l'outil de réponse.
  * Partagé entre le process principal (appel API) et l'interface (revue des propositions).
  */
-import type { Database, MailMessage, Shipment } from './types';
+import type { Database, MailMessage, Shipment, ShipmentInvoice } from './types';
 
 export const MAIL_ANALYSIS_SYSTEM = `Tu es l'assistant logistique de "Bao", un logiciel de gestion des importations depuis la Chine (société : Wall Up, France).
 On te donne des emails échangés avec des transporteurs (freight forwarders), transitaires, agents de sourcing / contrôle qualité en Chine, leurs PIÈCES JOINTES PDF (devis de fret, booking, bill of lading, factures, packing lists, rapports d'inspection — lis-les en entier : c'est là que sont les prix, volumes, poids, numéros de conteneur, dates et statut du transit) et ce que Bao connaît déjà.
@@ -13,7 +13,7 @@ Règles :
   summary : bilan en français (5 à 10 lignes) de la relation : ce qui a été fait, prix pratiqués, délais constatés, problèmes, ton de la relation.
   actions : ce que l'on attend de MOI ou ce que j'attends d'EUX (documents à envoyer, paiement, confirmation, relance…), avec dueDate (AAAA-MM-JJ) si une date est mentionnée sinon "", et mailId de l'email source.
   mailIds : les ids des emails qui concernent ce partenaire.
-- shipments : une entrée par expédition / conteneur réellement évoquée (booking, B/L, numéro de conteneur, ETD/ETA, devis de fret accepté). existingId si elle correspond à une expédition connue (même n° de conteneur, de suivi, de booking ou de référence, ou même trajet à la même période) — IMPORTANT : ne crée JAMAIS de doublon ; si un email est déjà rattaché à une expédition Bao (« Expédition Bao : id »), c'est forcément celle-là (existingId). Une seule entrée par conteneur réel, en fusionnant les informations de tous les emails et PDF. reference : libellé court (ex. "FCL 40HQ Shenzhen → Le Havre sept. 2026"). Statut : planifiee (devis / booking pas parti), collectee (marchandise chez le transitaire), en_transit (parti), dedouanement, livree. Montants : nombres (null si inconnu), currency de l'email. FACTURES : si une facture de transport (PDF joint, ou montants détaillés dans l'email) est présente, reporte EXACTEMENT ses montants dans SA devise (freightCost = fret / ocean freight, originFees = frais au départ, destinationFees = frais à l'arrivée : THC, dédouanement, livraison, insuranceCost = assurance) et renseigne invoiceTotal = le total de la facture tel qu'imprimé (le total HT si TVA, sinon le total), invoiceRef = son numéro, invoiceCurrency = sa devise ; la somme freightCost + originFees + destinationFees + insuranceCost doit être égale à invoiceTotal (mets dans freightCost ce que tu ne sais pas classer). Une facture remplace toujours un devis ou une estimation antérieure. notes : n° B/L, navire, port, frais annexes, incidents.
+- shipments : une entrée par expédition / conteneur réellement évoquée (booking, B/L, numéro de conteneur, ETD/ETA, devis de fret accepté). existingId si elle correspond à une expédition connue (même n° de conteneur, de suivi, de booking ou de référence, ou même trajet à la même période) — IMPORTANT : ne crée JAMAIS de doublon ; si un email est déjà rattaché à une expédition Bao (« Expédition Bao : id »), c'est forcément celle-là (existingId). Une seule entrée par conteneur réel, en fusionnant les informations de tous les emails et PDF. reference : libellé court (ex. "FCL 40HQ Shenzhen → Le Havre sept. 2026"). Statut : planifiee (devis / booking pas parti), collectee (marchandise chez le transitaire), en_transit (parti), dedouanement, livree. Montants : nombres (null si inconnu), currency de l'email. FACTURES : si une facture de transport (PDF joint, ou montants détaillés dans l'email) est présente, reporte EXACTEMENT ses montants dans SA devise (freightCost = fret / ocean freight, originFees = frais au départ, destinationFees = frais à l'arrivée : THC, dédouanement, livraison, insuranceCost = assurance) et renseigne invoiceTotal = le total de la facture tel qu'imprimé (le total HT si TVA, sinon le total), invoiceRef = son numéro, invoiceCurrency = sa devise ; la somme freightCost + originFees + destinationFees + insuranceCost doit être égale à invoiceTotal (mets dans freightCost ce que tu ne sais pas classer). invoiceDate = sa date (AAAA-MM-JJ), invoiceLabel = son objet en 2-4 mots (ex. « fret maritime », « frais de stationnement », « surestaries »). Une facture remplace un devis ou une estimation antérieure ; une facture COMPLÉMENTAIRE (frais de stationnement, surestaries, douane, livraison… reçue après la facture principale) est une entrée à part : donne uniquement SES montants, jamais le cumul. notes : n° B/L, navire, port, frais annexes, incidents.
 - overview : 3 à 6 lignes en français, vue d'ensemble : où en est la logistique, ce qui presse.
 - Dates au format AAAA-MM-JJ. Pas de texte en dehors de l'outil.`;
 
@@ -37,7 +37,7 @@ export const MAIL_ANALYSIS_TOOL = {
         status: { type: 'string', enum: ['planifiee', 'collectee', 'en_transit', 'dedouanement', 'livree'] },
         cbm: { type: ['number', 'null'] }, weightKg: { type: ['number', 'null'] }, freightCost: { type: ['number', 'null'] }, insuranceCost: { type: ['number', 'null'] }, originFees: { type: ['number', 'null'] }, destinationFees: { type: ['number', 'null'] },
         currency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'CNY'] }, notes: { type: 'string' }, mailIds: { type: 'array', items: { type: 'string' } },
-        invoiceTotal: { type: ['number', 'null'], description: 'Total de la facture de transport, si une facture est présente' }, invoiceRef: { type: 'string' }, invoiceCurrency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'CNY'] },
+        invoiceTotal: { type: ['number', 'null'], description: 'Total de la facture de transport, si une facture est présente' }, invoiceRef: { type: 'string' }, invoiceCurrency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'CNY'] }, invoiceDate: { type: 'string' }, invoiceLabel: { type: 'string' },
       }, required: ['reference', 'status'] } },
       overview: { type: 'string' },
     },
@@ -48,7 +48,7 @@ export const MAIL_ANALYSIS_TOOL = {
 /** Texte envoyé à l'IA : contexte connu + emails (tronqués). */
 export function buildMailAnalysisPrompt(db: Pick<Database, 'partners' | 'shipments' | 'contacts'>, mails: MailMessage[]): string {
   const known = db.partners.map((p) => `- ${p.id} · ${p.name} (${p.type}) ${p.email || ''} ${p.city || ''}${db.contacts.filter((c) => c.ownerType === 'partner' && c.ownerId === p.id).map((c) => ` · contact ${c.name} ${c.email}`).join('')}`).join('\n') || '(aucun)';
-  const ships = db.shipments.map((s) => `- ${s.id} · ${s.reference} · statut ${s.status} · suivi ${s.trackingRef || '—'} · ETD ${s.etd || '—'} ETA ${s.eta || '—'}${s.notes ? ` · ${s.notes.slice(0, 120)}` : ''}`).join('\n') || '(aucune)';
+  const ships = db.shipments.map((s) => `- ${s.id} · ${s.reference} · statut ${s.status} · suivi ${s.trackingRef || '—'} · ETD ${s.etd || '—'} ETA ${s.eta || '—'}${(s.invoices ?? []).length ? ` · factures déjà comptées : ${(s.invoices ?? []).map((i) => `${i.ref || 'facture'} ${i.total} ${i.currency}`).join(', ')}` : ''}${s.notes ? ` · ${s.notes.slice(0, 120)}` : ''}`).join('\n') || '(aucune)';
   const body = mails.map((m) => `=== EMAIL id=${m.id}\nDate : ${m.date.slice(0, 10)}\nDe : ${m.fromName} <${m.from}>\nÀ : ${m.to}\nObjet : ${m.subject}${m.shipmentId ? `\nExpédition Bao : ${m.shipmentId}` : ''}\nPièces jointes : ${m.attachments.map((a) => a.filename).join(', ') || 'aucune'}\n\n${m.text.slice(0, 5000)}`).join('\n\n');
   return `Partenaires déjà connus :\n${known}\n\nExpéditions déjà connues :\n${ships}\n\nEmails à analyser (${mails.length}) :\n\n${body}`;
 }
@@ -110,32 +110,58 @@ export function suggestShipmentUpdate(m: { date: string; subject: string; text: 
   return { status, etd: etd && etd !== shipment.etd ? etd : '', eta: eta && eta !== shipment.eta ? eta : '', evidence };
 }
 
-/**
- * Montants d'une expédition proposés par l'analyse d'emails. Si une facture est présente (invoiceTotal), ses montants
- * remplacent ce qui était connu (devis, estimation) et le total est forcé à celui de la facture ; sinon on complète
- * seulement les montants manquants.
- */
-export function shipmentCostsFromAnalysis(
-  current: Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency' | 'notes'>,
-  sh: { freightCost?: number | null; insuranceCost?: number | null; originFees?: number | null; destinationFees?: number | null; currency?: Shipment['currency']; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: Shipment['currency'] },
-): Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency'> & { invoiceNote: string } {
-  const n = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : 0);
-  if (n(sh.invoiceTotal) > 0) {
-    const total = n(sh.invoiceTotal);
-    let freight = n(sh.freightCost), ins = n(sh.insuranceCost), org = n(sh.originFees), dst = n(sh.destinationFees);
-    const others = ins + org + dst;
-    if (Math.abs(freight + others - total) > 0.01) {
-      if (others <= total) freight = Math.round((total - others) * 100) / 100;   // le fret absorbe l'écart
-      else { freight = total; ins = 0; org = 0; dst = 0; }                        // détail incohérent : tout dans le fret
-    }
-    const invoiceNote = `Facture ${sh.invoiceRef || 'transport'} : ${total} ${sh.invoiceCurrency ?? sh.currency ?? current.currency}.`;
-    return { freightCost: freight, insuranceCost: ins, originFees: org, destinationFees: dst, currency: sh.invoiceCurrency ?? sh.currency ?? current.currency, invoiceNote: current.notes.includes(invoiceNote) ? '' : invoiceNote };
+export type ShipmentCostFields = Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency' | 'notes' | 'invoices'>;
+export interface AnalysisInvoice { freightCost?: number | null; insuranceCost?: number | null; originFees?: number | null; destinationFees?: number | null; currency?: Shipment['currency']; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: Shipment['currency']; invoiceDate?: string; invoiceLabel?: string }
+
+const num = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : 0);
+const normRef = (r: string | undefined) => (r ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Ventile les montants d'une facture pour que la somme tombe exactement sur son total (le fret absorbe l'écart). */
+function splitInvoice(sh: AnalysisInvoice): { freight: number; ins: number; org: number; dst: number } {
+  const total = num(sh.invoiceTotal);
+  let freight = num(sh.freightCost), ins = num(sh.insuranceCost), org = num(sh.originFees), dst = num(sh.destinationFees);
+  const others = ins + org + dst;
+  if (Math.abs(freight + others - total) > 0.01) {
+    if (others <= total) freight = Math.round((total - others) * 100) / 100;
+    else { freight = total; ins = 0; org = 0; dst = 0; }
   }
-  const had = current.freightCost || current.insuranceCost || current.originFees || current.destinationFees;
+  return { freight, ins, org, dst };
+}
+
+/**
+ * Montants d'une expédition proposés par l'analyse d'emails.
+ * - Sans facture : on complète seulement les montants manquants (un devis ne remplace jamais ce qui est saisi).
+ * - Première facture (l'expédition n'en avait pas) : elle REMPLACE les devis / estimations, total forcé à celui de la facture.
+ * - Facture complémentaire (l'expédition a déjà une facture, référence différente) : ses montants S'AJOUTENT, convertis dans la devise de l'expédition.
+ * - Facture déjà connue (même référence, ou même total dans la même devise) : rien ne change.
+ * `rate(from, to)` : combien vaut 1 `from` en `to` (1 si inconnu).
+ */
+export function shipmentCostsFromAnalysis(current: ShipmentCostFields, sh: AnalysisInvoice, rate: (from: Shipment['currency'], to: Shipment['currency']) => number = () => 1): Pick<Shipment, 'freightCost' | 'insuranceCost' | 'originFees' | 'destinationFees' | 'currency' | 'invoices'> & { invoiceNote: string; mode: 'complete' | 'replace' | 'add' | 'known' } {
+  const invoices = current.invoices ?? [];
+  const base = { freightCost: current.freightCost, insuranceCost: current.insuranceCost, originFees: current.originFees, destinationFees: current.destinationFees, currency: current.currency, invoices };
+  if (!(num(sh.invoiceTotal) > 0)) {
+    const had = current.freightCost || current.insuranceCost || current.originFees || current.destinationFees;
+    return { ...base, freightCost: current.freightCost || num(sh.freightCost), insuranceCost: current.insuranceCost || num(sh.insuranceCost), originFees: current.originFees || num(sh.originFees), destinationFees: current.destinationFees || num(sh.destinationFees), currency: had ? current.currency : (sh.currency ?? current.currency), invoiceNote: '', mode: 'complete' };
+  }
+  const total = num(sh.invoiceTotal); const cur = sh.invoiceCurrency ?? sh.currency ?? current.currency;
+  const inv: ShipmentInvoice = { ref: sh.invoiceRef ?? '', total, currency: cur, date: sh.invoiceDate ?? '', label: sh.invoiceLabel ?? '' };
+  // Facture déjà comptée ? (référence identique, ou même montant dans la même devise ; anciennes versions : note « Facture X : total »)
+  const known = invoices.some((x) => (normRef(x.ref) && normRef(x.ref) === normRef(inv.ref)) || (Math.abs(x.total - total) < 0.01 && x.currency === cur))
+    || (invoices.length === 0 && new RegExp(`Facture [^:]*: ${total.toString().replace('.', '[.,]')} ${cur}`).test(current.notes));
+  if (known) return { ...base, invoiceNote: '', mode: 'known' };
+  const parts = splitInvoice(sh);
+  const label = inv.label ? ` (${inv.label})` : '';
+  const hadInvoice = invoices.length > 0 || /Facture [^:]*: [\d.,]+ [A-Z]{3}/.test(current.notes);
+  if (!hadInvoice) {
+    return { freightCost: parts.freight, insuranceCost: parts.ins, originFees: parts.org, destinationFees: parts.dst, currency: cur, invoices: [inv], invoiceNote: `Facture ${inv.ref || 'transport'}${label} : ${total} ${cur}.`, mode: 'replace' };
+  }
+  const k = cur === current.currency ? 1 : rate(cur, current.currency);
+  const r2 = (v: number) => Math.round(v * k * 100) / 100;
   return {
-    freightCost: current.freightCost || n(sh.freightCost), insuranceCost: current.insuranceCost || n(sh.insuranceCost),
-    originFees: current.originFees || n(sh.originFees), destinationFees: current.destinationFees || n(sh.destinationFees),
-    currency: had ? current.currency : (sh.currency ?? current.currency), invoiceNote: '',
+    freightCost: current.freightCost + r2(parts.freight),
+    insuranceCost: current.insuranceCost + r2(parts.ins), originFees: current.originFees + r2(parts.org), destinationFees: current.destinationFees + r2(parts.dst),
+    currency: current.currency, invoices: [...invoices, inv],
+    invoiceNote: `Facture complémentaire ${inv.ref || ''}${label} : ${total} ${cur}${k !== 1 ? ` (≈ ${r2(total)} ${current.currency})` : ''}, ajoutée aux coûts.`, mode: 'add',
   };
 }
 
@@ -181,6 +207,7 @@ export function mergeShipments(keep: Shipment, other: Shipment): Shipment {
     trackingRef: pick(keep.trackingRef, other.trackingRef, ''),
     documentId: keep.documentId ?? other.documentId,
     notes,
+    invoices: [...(keep.invoices ?? []), ...(other.invoices ?? []).filter((o) => !(keep.invoices ?? []).some((k) => (k.ref && k.ref === o.ref) || (k.total === o.total && k.currency === o.currency)))],
   };
 }
 

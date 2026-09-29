@@ -266,7 +266,11 @@ export interface Shipment {
   trackingRef: string;
   documentId: string | null;
   notes: string;
+  /** Factures de transport déjà comptées dans les coûts (une facture complémentaire s'ajoute, une facture déjà connue n'est pas recomptée). */
+  invoices?: ShipmentInvoice[];
 }
+
+export interface ShipmentInvoice { ref: string; total: number; currency: Currency; date: string; label: string }
 
 /** Prix de vente et frais d'un produit sur un marché. */
 export interface MarketPrice {
@@ -412,7 +416,7 @@ export function normalizeDatabase(raw: Partial<Database>): Database {
   db.factories = db.factories.map((f) => ({ ...f, rating: (f as Partial<Factory>).rating ?? 0, comments: (f as Partial<Factory>).comments ?? [] }));
   db.orders = db.orders.map((o) => ({ ...o, proformaDocumentId: (o as Partial<Order>).proformaDocumentId ?? null }));
   const SHIP_STATUS = ['planifiee', 'collectee', 'en_transit', 'dedouanement', 'livree'];
-  db.shipments = db.shipments.map((sh) => ({ ...sh, projectId: (sh as Partial<Shipment>).projectId ?? null, status: SHIP_STATUS.includes(sh.status) ? sh.status : 'planifiee', orderIds: sh.orderIds ?? [], notes: sh.notes ?? '', trackingRef: sh.trackingRef ?? '' }));
+  db.shipments = db.shipments.map((sh) => ({ ...sh, projectId: (sh as Partial<Shipment>).projectId ?? null, status: SHIP_STATUS.includes(sh.status) ? sh.status : 'planifiee', orderIds: sh.orderIds ?? [], notes: sh.notes ?? '', trackingRef: sh.trackingRef ?? '', invoices: (sh as Partial<Shipment>).invoices ?? [] }));
   // Migration : chaque ancienne « gamme » devient un dossier.
   for (const g of db.projects) {
     if (!db.folders.some((f) => f.id === `folder-${g.id}`) && (db.products as Partial<Product>[]).some((p) => p.projectId === g.id && !p.folderId)) {
@@ -448,7 +452,7 @@ export function normalizeDatabase(raw: Partial<Database>): Database {
 /** Résultat de l'analyse IA d'un lot d'emails transporteurs. */
 export interface MailAnalysis {
   partners: { existingId: string | null; name: string; type: 'transporteur' | 'agent'; email: string; phone: string; wechat: string; city: string; services: string; contactName: string; contactRole: string; summary: string; actions: { text: string; dueDate: string; mailId: string }[]; mailIds: string[] }[];
-  shipments: { existingId: string | null; partnerName: string; reference: string; containerNo: string; trackingRef: string; mode: 'mer' | 'air' | 'rail' | 'express'; incoterm: 'EXW' | 'FOB' | 'CIF' | 'DDP'; origin: string; destination: string; etd: string; eta: string; status: 'planifiee' | 'collectee' | 'en_transit' | 'dedouanement' | 'livree'; cbm: number | null; weightKg: number | null; freightCost: number | null; insuranceCost: number | null; originFees: number | null; destinationFees: number | null; currency: 'USD' | 'EUR' | 'GBP' | 'CNY'; notes: string; mailIds: string[]; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: 'USD' | 'EUR' | 'GBP' | 'CNY' }[];
+  shipments: { existingId: string | null; partnerName: string; reference: string; containerNo: string; trackingRef: string; mode: 'mer' | 'air' | 'rail' | 'express'; incoterm: 'EXW' | 'FOB' | 'CIF' | 'DDP'; origin: string; destination: string; etd: string; eta: string; status: 'planifiee' | 'collectee' | 'en_transit' | 'dedouanement' | 'livree'; cbm: number | null; weightKg: number | null; freightCost: number | null; insuranceCost: number | null; originFees: number | null; destinationFees: number | null; currency: 'USD' | 'EUR' | 'GBP' | 'CNY'; notes: string; mailIds: string[]; invoiceTotal?: number | null; invoiceRef?: string; invoiceCurrency?: 'USD' | 'EUR' | 'GBP' | 'CNY'; invoiceDate?: string; invoiceLabel?: string }[];
   overview: string;
 }
 

@@ -57,3 +57,25 @@ describe('shipmentCostsFromAnalysis', () => {
     expect(r).toMatchObject({ freightCost: 1200, originFees: 150, destinationFees: 400, currency: 'USD', invoiceNote: '' });
   });
 });
+
+describe('shipmentCostsFromAnalysis — factures complémentaires', () => {
+  const withInvoice = { freightCost: 1850, insuranceCost: 0, originFees: 200, destinationFees: 350, currency: 'EUR' as const, notes: 'Facture F-1 : 2400 EUR.', invoices: [{ ref: 'F-1', total: 2400, currency: 'EUR' as const, date: '', label: '' }] };
+  it('une facture complémentaire s\'ajoute au lieu de remplacer', () => {
+    const r = shipmentCostsFromAnalysis(withInvoice, { destinationFees: 90, invoiceTotal: 90, invoiceRef: 'F-2', invoiceCurrency: 'EUR', invoiceLabel: 'frais de stationnement' });
+    expect(r.mode).toBe('add');
+    expect(r.freightCost + r.originFees + r.destinationFees + r.insuranceCost).toBe(2490);
+    expect(r.destinationFees).toBe(440); expect(r.invoices).toHaveLength(2); expect(r.invoiceNote).toContain('complémentaire');
+  });
+  it('la même facture ré-analysée ne compte pas deux fois', () => {
+    const r = shipmentCostsFromAnalysis(withInvoice, { freightCost: 2400, invoiceTotal: 2400, invoiceRef: 'F-1', invoiceCurrency: 'EUR' });
+    expect(r.mode).toBe('known'); expect(r.freightCost).toBe(1850);
+  });
+  it('ancienne expédition (note « Facture … ») sans liste : la nouvelle facture s\'ajoute quand même', () => {
+    const r = shipmentCostsFromAnalysis({ ...withInvoice, invoices: [] }, { invoiceTotal: 90, invoiceRef: 'F-2', invoiceCurrency: 'EUR' });
+    expect(r.mode).toBe('add'); expect(r.freightCost).toBe(1940);
+  });
+  it('conversion de devise pour une facture complémentaire', () => {
+    const r = shipmentCostsFromAnalysis(withInvoice, { invoiceTotal: 100, invoiceRef: 'F-3', invoiceCurrency: 'USD' }, (from, to) => (from === 'USD' && to === 'EUR' ? 0.9 : 1));
+    expect(r.freightCost).toBe(1940); expect(r.currency).toBe('EUR');
+  });
+});

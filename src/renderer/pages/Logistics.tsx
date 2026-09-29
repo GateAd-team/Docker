@@ -242,6 +242,11 @@ export function ShipmentModal({ shipment, onChange, onClose, onSave }: { shipmen
         <Field label="Total logistique"><div style={{ paddingTop: 8 }}><b>{formatEur(total)}</b>{goodsEur > 0 && <span className="muted small"> · {((total / goodsEur) * 100).toFixed(0)} % de la marchandise</span>}</div></Field>
         <Field label="Notes" span={4}><Textarea value={shipment.notes} onChange={set('notes')} placeholder="Frais au départ = camion usine → port, THC, documents. Frais à l'arrivée = THC, dédouanement, livraison finale." /></Field>
       </div>
+      {(shipment.invoices ?? []).length > 0 && (
+        <div className="small mt"><span className="muted">Factures de transport comptées dans ces coûts : </span>
+          {(shipment.invoices ?? []).map((inv, i) => <span key={i} className="row-flex" style={{ display: 'inline-flex', gap: 4, marginRight: 8 }}><Badge>{inv.ref || 'facture'}{inv.label ? ` · ${inv.label}` : ''} · {formatMoney(inv.total, inv.currency)}</Badge><button className="btn ghost small" title="Retirer cette facture de la liste (les montants ne changent pas)" onClick={() => onChange({ ...shipment, invoices: (shipment.invoices ?? []).filter((_, j) => j !== i) })}>✕</button></span>)}
+        </div>
+      )}
       <div className="small muted mt">Marchandise : {formatEur(goodsEur)} · {formatMoney(shipment.freightCost + shipment.insuranceCost + shipment.originFees + shipment.destinationFees, shipment.currency)} de logistique. Ces coûts sont répartis entre les produits au prorata du volume dans Finance.</div>
     </Modal>
   );
